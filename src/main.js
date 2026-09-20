@@ -78,7 +78,7 @@ const VIEWS = {
   namesti:  { p: [0, 34, 78],     yaw: Math.PI,        pitch: -0.30 },
   nadhled:  { p: [-40, 190, 260], yaw: Math.PI,        pitch: -0.56 },
   ulice:    { p: [8, 3.2, 40],    yaw: Math.PI,        pitch: -0.04 },
-  brana:    { p: [13.9, 2.0, 96.8], yaw: 0.733,         pitch: 0.12 },
+  brana:    { p: [4.5, 2.0, 86.4], yaw: 0.733,         pitch: 0.14 },
   hradby:   { p: [-90, 26, 60],   yaw: Math.PI * 1.45, pitch: -0.20 },
   dlazba:   { p: [0, 28, 10],     yaw: Math.PI,        pitch: -1.35 },
   solni:    { p: [-58, 22, 14],   yaw: -1.30,          pitch: -0.30 },
@@ -88,6 +88,9 @@ const VIEWS = {
   podloubi2:{ p: [-38.5, 1.7, -14.7], yaw: -1.611,     pitch: 0.10 },
   rada:     { p: [0, 2.0, -6],    yaw: Math.PI,        pitch: 0.10 },
   rada2:    { p: [10, 2.0, 6],    yaw: Math.PI * 0.62, pitch: 0.10 },
+  stit:     { p: [-10, 2.0, -18],  yaw: Math.PI,       pitch: 0.42 },
+  ulice_k_brane: { p: [-4.0, 1.9, 44.6], yaw: -0.265,  pitch: 0.06 },
+  ulice_ruzova:  { p: [42.3, 1.9, 6.3],  yaw: 2.050,   pitch: 0.06 },
   zataras:  { p: [0, 2.2, 0],     yaw: 0,              pitch: -0.02, atBarrier: 0 },
 }
 const wanted = new URLSearchParams(location.search).get('cam')

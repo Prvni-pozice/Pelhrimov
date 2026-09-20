@@ -346,6 +346,13 @@ def build_buildings(ways, rels, sq_polys):
         })
     return out
 
+def dist_point_seg(p, a, b):
+    dx, dz = b[0] - a[0], b[1] - a[1]
+    L2 = dx * dx + dz * dz
+    t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / L2))
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dz))
+
+
 def dist_to_polys(p, polys):
     best = 1e9
     for poly in polys:
@@ -531,6 +538,66 @@ def boundary_ring(sq_polys, gates, steps=360):
     return ring
 
 
+def routes_to_gates(roads, sq_polys, gates):
+    """Úseky ulic na cestě z náměstí ke každé bráně.
+
+    Fasády se ladí tam, kam hráč opravdu chodí: na náměstí a v ulicích, které
+    z něj vedou k branám. Cestu nehádáme podle názvů ulic — postavíme z ulic
+    graf (koncové i mezilehlé body slepené na půlmetrovou mřížku) a Dijkstrou
+    najdeme nejkratší trasu od náměstí ke každé bráně. Vrací seznam úseček.
+    """
+    import heapq
+    SNAP = 0.5
+    def key(p):
+        return (round(p[0] / SNAP), round(p[1] / SNAP))
+
+    graph = collections.defaultdict(list)
+    for r in roads:
+        if r['hw'] in ('steps',):
+            continue
+        pts = r['poly']
+        for i in range(len(pts) - 1):
+            a, b = key(pts[i]), key(pts[i + 1])
+            if a == b:
+                continue
+            w = math.dist(pts[i], pts[i + 1])
+            graph[a].append((b, w, (pts[i], pts[i + 1])))
+            graph[b].append((a, w, (pts[i], pts[i + 1])))
+    if not graph:
+        return []
+
+    def nearest_node(p):
+        return min(graph, key=lambda n: (n[0] * SNAP - p[0]) ** 2 + (n[1] * SNAP - p[1]) ** 2)
+
+    cx = sum(q[0] for poly in sq_polys for q in poly) / sum(len(p) for p in sq_polys)
+    cz = sum(q[1] for poly in sq_polys for q in poly) / sum(len(p) for p in sq_polys)
+    start = nearest_node((cx, cz))
+
+    dist = {start: 0.0}
+    prev = {}
+    pq = [(0.0, start)]
+    while pq:
+        d, n = heapq.heappop(pq)
+        if d > dist.get(n, 1e18):
+            continue
+        for m, w, seg in graph[n]:
+            nd = d + w
+            if nd < dist.get(m, 1e18):
+                dist[m] = nd
+                prev[m] = (n, seg)
+                heapq.heappush(pq, (nd, m))
+
+    segs = []
+    for g in gates:
+        node = nearest_node((g['x'], g['z']))
+        seen = set()
+        while node in prev and node not in seen:
+            seen.add(node)
+            node, seg = prev[node]
+            segs.append(seg)
+    return segs
+
+
 def crossings(roads, ring):
     """Kde ulice protínají hranici — tam přijde zátaras.
 
@@ -630,6 +697,19 @@ def main():
         # dost hlubokých na to, aby se do nich dalo zakrojit
         b['arcade'] = bool(b['sq'] and ARCADE_SIDES.get(b['side']) and min(b['L'], b['W']) > 8.5)
 
+    # Domy s propracovanou fasádou: fronta náměstí a domy v ulicích k branám.
+    routes = routes_to_gates(world['roads'], sq, gates)
+    for b in world['buildings']:
+        if b['sq']:
+            b['rich'] = True
+            continue
+        if not b['play'] or b['kind'] in ('garage', 'shed', 'carport', 'roof'):
+            b['rich'] = False
+            continue
+        b['rich'] = any(
+            min((dist_point_seg(p, a, c) for a, c in routes), default=1e9) < 15
+            for p in b['poly'])
+
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(world, f, ensure_ascii=False, separators=(',', ':'))
 
@@ -641,6 +721,8 @@ def main():
     print(f"  střechy: {dict(collections.Counter(x['roof'] for x in b))}")
     tw = [x['name'] for x in b if x.get('tower')]
     print(f"  věže podle fotografií: {', '.join(tw) if tw else 'žádné'}")
+    print(f"  propracované fasády: {sum(1 for x in b if x.get('rich'))} domů "
+          f"(z toho {sum(1 for x in b if x.get('arcade'))} s podloubím)")
     sides = collections.Counter(x['side'] for x in b if x['sq'])
     print(f"  fronta náměstí po stranách: {dict(sides)}; podloubí: "
           f"{sum(1 for x in b if x.get('arcade'))} domů")

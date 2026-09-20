@@ -9,7 +9,7 @@ Grafika míří na Roblox, ne na Minecraft: matné plochy, čisté barvy, žádn
 textury. Objem dělá geometrie a spékané stínění v rozích.
 
 ![Podloubí a renesanční štíty na Masarykově náměstí](docs/podloubi.png)
-![Jádro z nadhledu](docs/nadhled.png)
+![Štíty s podkrovními okny zblízka](docs/stity.png)
 
 ```bash
 npm install
@@ -76,6 +76,23 @@ podle fotografií na **Wikimedia Commons** (vše CC BY / CC BY-SA), ne odhadem:
   Horní (Rynárecká) brána nižší věž s ochozem, **Solní brána jen nízký
   patrový domek** — ten dřív dostával sedmnáctimetrovou věž, kterou nemá.
 * **Barvy** — střechy jsou cihlově oranžové, ne hnědé; fasády pastelové.
+
+### Dvě úrovně detailu fasády
+
+Propracovanou fasádu dostane **82 domů**: celá fronta náměstí a domy v ulicích,
+které z náměstí vedou k branám. Ty ulice se nehádají podle názvu — z ulic se
+postaví graf a Dijkstrou se najde nejkratší cesta od náměstí ke každé bráně
+(vyjde Solní, Poděbradova, Růžová a Palackého, tedy přesně radiály k branám).
+
+Skladba takové fasády: sokl — přízemní výkladec v tmavém rámu (nebo podloubí) —
+kordonová římsa — okno v bílém ostění ze všech čtyř stran — hlavní římsa —
+odstupňovaný štít s podkrovním oknem. Rytmus se odvozuje od středu fasády, aby
+vyšel symetricky; perioda 3 m (pilíř 1 m, ostění 0,5 m, okno 1 m, ostění 0,5 m).
+
+Zbylých 332 domů má holé okno bez ostění. Hráč k nim nedojde blíž než na druhou
+stranu ulice a plná skladba by jen ztrojnásobila geometrii.
+
+![Ulice k Horní bráně](docs/ulice.png)
 
 Hradby zůstávají skromné: OSM u nich neuvádí výšku ani tvar, takže se kreslí
 jako 3,5 m kamenná zeď. Zubaté cimbuří z prvního pokusu byl výmysl a u Solní
@@ -166,7 +183,7 @@ lze podstrčit přes `PLAYWRIGHT_CORE`. `npm test` je nepotřebuje.
 ## Stav
 
 Hotové: svět, chůze a kolize, hranice mapy se zátarasy, průchozí brány,
-deset úkolů, HUD s minimapou, ovládání na mobilu, test průchodnosti.
+podloubí a propracované fasády na náměstí i v ulicích k branám, deset úkolů,
+HUD s minimapou, ovládání na mobilu, test průchodnosti.
 
-Co dál: bohatší fasády domů na náměstí (renesanční štíty, členitější přízemí),
-zvuk, denní doba, žebříček časů.
+Co dál: zvuk, denní doba, žebříček časů, interiéry podloubí s obchody.

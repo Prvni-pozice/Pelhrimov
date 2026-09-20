@@ -132,8 +132,18 @@ export function buildHouse(b, ter, front, detail, through) {
     }
   }
 
-  // ── 3. okna, rámy, portál ──
+  // ── 3. okna, ostění, kordonová římsa, portál ──
+  //
+  // Dvě úrovně detailu. Domy na náměstí a v ulicích k branám (`b.rich`) mají
+  // plnou skladbu: okno v bílém ostění ze všech čtyř stran, kordonová římsa
+  // nad každým podlažím a v přízemí výkladec. Zbytek města si vystačí s holým
+  // oknem — hráč k nim nedojde blíž než na druhou stranu ulice a plné ostění
+  // by jen ztrojnásobilo geometrii.
+  //
+  // Rytmus je odvozený od STŘEDU fasády, aby vyšel symetricky. Perioda 3 m:
+  // pilíř 1 m — ostění 0,5 m — okno 1 m — ostění 0,5 m.
   if (detail) {
+    const rich = !!b.rich
     let door = null
     if (front) {
       const [fu, fv] = toLocal(front[0], front[1])
@@ -145,31 +155,57 @@ export function buildHouse(b, ter, front, detail, through) {
         if (d < best) { best = d; door = w }
       }
     }
+
     for (const w of wall) {
       if (!w.dx && !w.dz) continue
       const u = ou + (w.i + 0.5) * VOX, v = ov + (w.j + 0.5) * VOX
-      // souřadnice PODÉL zdi, měřená od středu domu → okna vyjdou symetricky,
-      // uprostřed fasády zůstane pilíř a pod ním je místo na portál
       const t = Math.abs(w.dx) >= Math.abs(w.dz) ? v - vc : u - uc
-      if ((Math.floor(Math.abs(t) + 0.5) % 2) !== 1) continue
+      const c = Math.abs(Math.round(t / VOX))
+      const m = c % 6
+      const isWin = rich ? (m === 2 || m === 3) : ((Math.floor(Math.abs(t) + 0.5) % 2) === 1)
+      const isJamb = rich && (m === 1 || m === 4)
+      const outI = Math.sign(w.dx), outJ = Math.sign(w.dz)
+      const proud = (y, blk) => {           // prvek vystupující z líce
+        set(w.i, y, w.j, blk)
+        if (outI) set(w.i + outI, y, w.j, blk)
+        if (outJ) set(w.i, y, w.j + outJ, blk)
+      }
 
       for (let k = 0; k < levels; k++) {
         const base = floorC + (k === 0 ? 0 : G_CELLS + (k - 1) * F_CELLS)
+        // kordonová římsa na patě každého patra
+        if (rich && k > 0 && base < eaveC - 1) proud(base, B_RIMSA)
+
         const y0w = base + (k === 0 ? 3 : 2)
         const y1w = base + (k === 0 ? 6 : 4)
         if (y1w + 1 >= eaveC) continue
-        for (let y = y0w; y <= y1w; y++) set(w.i, y, w.j, B_SKLO)
-        set(w.i, y0w - 1, w.j, B_RAM)    // parapet
-        set(w.i, y1w + 1, w.j, B_RAM)    // nadpraží
+
+        if (k === 0 && rich && !b.arcade) {
+          // přízemní výkladec: širší otvor v tmavém rámu
+          if (m >= 1 && m <= 4) {
+            for (let y = y0w; y <= y1w; y++) set(w.i, y, w.j, (m === 1 || m === 4) ? B_DVERE : B_SKLO)
+            set(w.i, y0w - 1, w.j, B_RAM)
+            set(w.i, y1w + 1, w.j, B_RAM)
+          }
+          continue
+        }
+        if (isWin) {
+          for (let y = y0w; y <= y1w; y++) set(w.i, y, w.j, B_SKLO)
+          set(w.i, y0w - 1, w.j, B_RAM)      // parapet
+          set(w.i, y1w + 1, w.j, B_RAM)      // nadpraží
+        } else if (isJamb) {
+          for (let y = y0w - 1; y <= y1w + 1; y++) set(w.i, y, w.j, B_RAM)
+        }
       }
     }
     if (door) {
       const perp = Math.abs(door.dx) >= Math.abs(door.dz) ? [0, 1] : [1, 0]
-      for (let s = 0; s <= 1; s++) {
+      for (let s = -1; s <= 1; s++) {
         const i = door.i + perp[0] * s, j = door.j + perp[1] * s
         if (!M(i, j)) continue
-        for (let y = floorC; y < floorC + 5; y++) set(i, y, j, B_DVERE)
-        set(i, floorC + 5, j, B_RAM)
+        const jamb = Math.abs(s) === 1
+        for (let y = floorC; y < floorC + 6; y++) set(i, y, j, jamb ? B_KAMEN : B_DVERE)
+        set(i, floorC + 6, j, B_RIMSA)
       }
     }
   }
@@ -328,6 +364,20 @@ function buildRoof(b, C) {
         }
         set(i, eaveC + hs + 1, j, B_RIMSA)              // krycí deska schodu
         set(i + out, eaveC + hs + 1, j, B_RIMSA)
+
+        // Okno do podkroví. Bez něj je štít velká prázdná plocha a dům
+        // vypadá, jako by mu nad okapem někdo postavil plentu.
+        const dd = ov + (j + 0.5) * VOX - vc
+        const wy = Math.round(hs * 0.45)        // doprostřed štítu, ne k římse
+        if (hs >= 6 && wy >= 3) {
+          if (Math.abs(dd) < 1.0) {
+            for (let y = wy - 1; y <= wy + 1; y++) set(i + out, eaveC + y, j, B_SKLO)
+            set(i + out, eaveC + wy - 2, j, B_RIMSA)
+            set(i + out, eaveC + wy + 2, j, B_RIMSA)
+          } else if (Math.abs(dd) < 1.5) {
+            for (let y = wy - 2; y <= wy + 2; y++) set(i + out, eaveC + y, j, B_RIMSA)
+          }
+        }
       }
     }
   }
