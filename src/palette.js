@@ -31,6 +31,7 @@ export const BLOCKS = {
   18: { name: 'dvere',       c: 0x6b452c, n: 0.03 },
   19: { name: 'drevo',       c: 0x8a6239, n: 0.05 },
   20: { name: 'plech',       c: 0x6d7a80, n: 0.03 },  // plechové střechy, věže
+  22: { name: 'medenka',     c: 0x5aa08c, n: 0.03 },  // měděné lucerny na věžích
   21: { name: 'stit',        c: 0xe8dcc4, n: 0.03 },  // štítová zeď nad římsou
 
   // ── zeleň a mobiliář ───────────────────────────────────────────────

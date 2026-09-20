@@ -27,7 +27,10 @@ scene.fog = new THREE.Fog(0xacd0ec, 300, 700)
 // ── světlo ──
 // Polokoule dělá základní tón (modré nebe shora, teplá zem zdola), slunce
 // přidává směr a stíny. Bez polokoule jsou stinné strany domů černé placky.
-scene.add(new THREE.HemisphereLight(0xc4dcf2, 0x6f6552, 1.1))
+// Polokoule je tu i proto, aby podloubí a průjezdy nebyly černé díry —
+// jsou to zákoutí, kam slunce nikdy nesvítí, a bez rozptýleného světla by
+// z nich byly tmavé skvrny na fasádě.
+scene.add(new THREE.HemisphereLight(0xcde2f5, 0x8a7f68, 1.4))
 const sun = new THREE.DirectionalLight(0xfff2d8, 1.7)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -78,7 +81,13 @@ const VIEWS = {
   brana:    { p: [13.9, 2.0, 96.8], yaw: 0.733,         pitch: 0.12 },
   hradby:   { p: [-90, 26, 60],   yaw: Math.PI * 1.45, pitch: -0.20 },
   dlazba:   { p: [0, 28, 10],     yaw: Math.PI,        pitch: -1.35 },
+  solni:    { p: [-58, 22, 14],   yaw: -1.30,          pitch: -0.30 },
+  chodnik:  { p: [-30, 3.5, -30], yaw: -2.30,          pitch: -0.10 },
   fasada:   { p: [-8, 2.0, -6],   yaw: -Math.PI / 2,   pitch: 0.12 },
+  podloubi: { p: [-10.1, 1.7, -32.6], yaw: -2.612,     pitch: 0.06 },
+  podloubi2:{ p: [-38.5, 1.7, -14.7], yaw: -1.611,     pitch: 0.10 },
+  rada:     { p: [0, 2.0, -6],    yaw: Math.PI,        pitch: 0.10 },
+  rada2:    { p: [10, 2.0, 6],    yaw: Math.PI * 0.62, pitch: 0.10 },
   zataras:  { p: [0, 2.2, 0],     yaw: 0,              pitch: -0.02, atBarrier: 0 },
 }
 const wanted = new URLSearchParams(location.search).get('cam')

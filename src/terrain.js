@@ -102,9 +102,11 @@ export class Terrain {
   _paint() {
     const d = this.d
     // pořadí je důležité: plochy → ulice → náměstí (náměstí přebíjí všechno)
-    for (const a of d.areas) this._fillPoly(a.poly, AREA_BLOCK[a.kind], a.kind === 'water')
+    this.fixed = new Uint8Array(this.W * this.D)   // co přišlo z OSM, se nepřemalovává
+    for (const a of d.areas) this._fillPoly(a.poly, AREA_BLOCK[a.kind], a.kind === 'water', true)
     for (const r of d.roads) this._stroke(r.poly, r.w, ROAD_BLOCK[r.m])
     for (const poly of d.square) this._fillPoly(poly, 4, false)
+    this._pavements(3, 8, d.boundary)
     // pořadí: vyhladit dlažbu → srovnat náměstí do roviny → zhrubnout trávu
     this._smoothPaved()
     for (const poly of d.square) this._flattenToPlane(poly, 14)
@@ -123,7 +125,7 @@ export class Terrain {
     }
   }
 
-  _fillPoly(poly, block, sink) {
+  _fillPoly(poly, block, sink, fixed) {
     let minX = 1e9, minZ = 1e9, maxX = -1e9, maxZ = -1e9
     for (const p of poly) {
       minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0])
@@ -133,6 +135,7 @@ export class Terrain {
       if (!pointInPoly(x, z, poly)) return
       const k = j * this.W + i
       this.M[k] = block
+      if (fixed) this.fixed[k] = 1
       if (sink) { this.H[k] -= 4; this.Hf[k] -= 4 * STEP }  // hladina níž, ať voda netvoří kopec
     })
   }
@@ -155,6 +158,62 @@ export class Terrain {
    * bludiště schůdků. Dost průchodů průměrem je srovná do jednoho čistého
    * sklonu — přesně tak, jak náměstí vypadá ve skutečnosti.
    */
+  /**
+   * Doplní chodníky do pásu kolem zpevněných ploch.
+   *
+   * OSM v historickém jádru chodníky skoro nemá zmapované, takže všechno mezi
+   * vozovkou a domem zůstávalo výchozí trávou — kolem náměstí z toho byly
+   * zelené dlaždice přesně tam, kde je ve skutečnosti dlažba. Plošné vydláždění
+   * celého jádra to ale přehnalo na druhou stranu a vydláždilo i dvorky, takže
+   * hradba u Solní brány stála uprostřed kamenné pláně.
+   *
+   * Tohle je mezi tím: dlažba se rozlije od vozovek a náměstí — `rOut` metrů
+   * všude (běžný chodník podél ulice) a `rIn` metrů uvnitř jádra, kde domy
+   * stojí přímo na dlažbě. Dál zůstane zeleň a plochy, které OSM výslovně
+   * označuje (parky, zahrady, voda), se nepřemalovávají vůbec.
+   */
+  _pavements(rOut, rIn, boundary) {
+    const inCore = this._polyMask(boundary)
+    const paved = (m) => Terrain.paved(m) || m === 4 || m === 5
+    for (let pass = 0; pass < rIn; pass++) {
+      const core = pass >= rOut
+      const add = []
+      for (let j = 1; j < this.D - 1; j++) {
+        for (let i = 1; i < this.W - 1; i++) {
+          const k = j * this.W + i
+          if (this.M[k] !== 1 || this.fixed[k]) continue
+          if (core && !inCore[k]) continue
+          if (paved(this.M[k - 1]) || paved(this.M[k + 1])
+              || paved(this.M[k - this.W]) || paved(this.M[k + this.W])) add.push(k)
+        }
+      }
+      for (const k of add) this.M[k] = 8
+    }
+  }
+
+  /** Rastr mnohoúhelníku řádkovým vyplněním — levnější než test bod po bodu. */
+  _polyMask(poly) {
+    const mask = new Uint8Array(this.W * this.D)
+    const xs = []
+    for (let j = 0; j < this.D; j++) {
+      const z = this.oz + (j + 0.5) * CELL
+      xs.length = 0
+      for (let i = 0, k = poly.length - 1; i < poly.length; k = i++) {
+        const z1 = poly[k][1], z2 = poly[i][1]
+        if ((z1 > z) !== (z2 > z)) {
+          xs.push(poly[k][0] + (z - z1) / (z2 - z1) * (poly[i][0] - poly[k][0]))
+        }
+      }
+      xs.sort((a, b) => a - b)
+      for (let p = 0; p + 1 < xs.length; p += 2) {
+        const i0 = Math.max(0, Math.ceil((xs[p] - this.ox) / CELL - 0.5))
+        const i1 = Math.min(this.W - 1, Math.floor((xs[p + 1] - this.ox) / CELL - 0.5))
+        for (let i = i0; i <= i1; i++) mask[j * this.W + i] = 1
+      }
+    }
+    return mask
+  }
+
   /**
    * Proloží plochou rovinu a usadí na ni celé náměstí.
    *

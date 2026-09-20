@@ -98,8 +98,8 @@ export async function buildWorld(data, onProgress = () => {}) {
     let cx = 0, cz = 0
     for (const p of b.poly) { cx += p[0]; cz += p[1] }
     hset.add(mesh, cx / b.poly.length, cz / b.poly.length)
-    boxes.push({ poly: b.poly, top: mesh.eaveY, name: b.name, id: b.id, sq: b.sq,
-                 special: b.special, through })
+    boxes.push({ poly: mesh.collide || b.poly, shape: b.poly, top: mesh.eaveY,
+                 name: b.name, id: b.id, sq: b.sq, special: b.special, through })
     stats.houses++
   }
   const houseGroup = hset.build(material)
@@ -359,10 +359,10 @@ function buildWall(w, ter, colorOf) {
       const gy = ter.groundY(x, z)
       const top = 2 * Math.round((gy + w.h - y0) / VOX / 2)
       for (let y = 0; y < top; y++) g[at(i, y, j)] = 12
-      // cimbuří: střídavě o dva voxely výš, měřeno PODÉL hradby
-      if (Math.floor(along / 1.5) % 2 === 0) {
-        for (let y = top; y < top + 2 && y < ny; y++) g[at(i, y, j)] = 12
-      }
+      // Žádné cimbuří. OSM u hradeb neuvádí výšku ani tvar a z fotek jádra je
+      // vidět, že dochované úseky jsou obyčejná kamenná zeď mezi domy a
+      // zahradami — zubatá koruna z prvního pokusu byl čistě můj výmysl a
+      // u Solní brány z ní byl hrad, který tam nestojí.
     }
   }
   const get = (x, y, z) => (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) ? 0 : g[at(x, y, z)]

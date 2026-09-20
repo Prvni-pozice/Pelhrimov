@@ -177,8 +177,10 @@ def simplify(pts, tol=0.35):
 WALL_PALETTE = ['#f6e7c0', '#f8f0dc', '#edc98f', '#e8b878', '#d6e0bc', '#bcd6e2',
                 '#f6cfc0', '#e2c6d6', '#eee9dd', '#fbf6e8', '#d8c9a4', '#f0d9a8',
                 '#cfdcc4', '#e8d0b0', '#c9d9e6', '#f2ddc8']
-ROOF_PALETTE = ['#b0553a', '#9a4630', '#c06442', '#874536', '#a85440', '#6f4a3e',
-                '#8e5040', '#b35f3d']
+# Na fotkách náměstí jsou střechy jasně cihlově oranžové, ne hnědé — tlumená
+# paleta z prvního pokusu dělala z Pelhřimova podzimní kulisu.
+ROOF_PALETTE = ['#c45f39', '#b85535', '#d06c42', '#a85030', '#c96540', '#b45a3c',
+                '#d4753f', '#bf5c33']
 LEVEL_H, GROUND_H = 3.2, 4.2   # výška běžného a přízemního podlaží
 
 def seeded(sid, palette):
@@ -196,6 +198,33 @@ def roof_shape(tags, L, W, kind):
     if W < 4.5: return 'skillion'
     return 'gable' if L / max(W, 0.1) > 1.25 else 'hipped'
 
+# ── ověřené rozměry dominant ────────────────────────────────────────
+# OSM u žádné z nich nemá výšku a paušální odhad byl špatně: ze Solní brány
+# dělal sedmnáctimetrovou věž, ačkoli je to nízký patrový domek s červenou
+# sedlovkou. Hodnoty níž jsou odečtené z fotografií na Wikimedia Commons
+# (vše CC BY-SA), ne vymyšlené:
+#   Dolní (Jihlavská) brána — vysoká bílá věž, strmá červená jehlanová střecha,
+#     hodiny ve štítu, měděná lucerna na hřebeni (soubor uvádí 36 m)
+#   Horní (Rynárecká) brána — nižší věž s dřevěným ochozem, valbová střecha,
+#     hodiny, cibulová měděná lucerna
+#   Solní brána — jen průjezdní domek o dvou podlažích, cihlově červená omítka
+#   kostel sv. Bartoloměje — hranolová věž s jehlou a lucernou
+# 'h' je výška zdiva nad podlahou; střecha a lucerna se přičtou.
+LANDMARKS = {
+    'Dolní brána': {'tower': {'h': 26.0, 'side': 8.5, 'roof': 'steep', 'lantern': 2.0},
+                    'wall': '#f3f0e8', 'roofcol': '#c25a34'},
+    'Horní brána': {'tower': {'h': 17.0, 'side': 8.0, 'roof': 'hip', 'lantern': 2.2},
+                    'wall': '#d6ccb6', 'roofcol': '#b2543a'},
+    'Solní brána': {'tower': None, 'roof': 'gable',
+                    'wall': '#c0543a', 'roofcol': '#c25a34'},
+    'svatý Bartoloměj': {'tower': {'h': 34.0, 'side': 6.0, 'roof': 'spire', 'lantern': 2.0},
+                         'wall': '#efe9dc', 'roofcol': '#b2543a'},
+    'svatý Vít': {'tower': {'h': 22.0, 'side': 5.0, 'roof': 'spire', 'lantern': 1.4},
+                  'wall': '#eee8da', 'roofcol': '#b2543a'},
+    'zámek Pelhřimov': {'tower': None},
+}
+
+
 def special_kind(tags, kind):
     """Stavby, které nejsou jen dům — dostanou v enginu vlastní hmotu.
 
@@ -210,6 +239,58 @@ def special_kind(tags, kind):
     if name.startswith('zámek') or tags.get('historic') == 'castle':
         return 'castle'
     return None
+
+
+# ── podloubí ────────────────────────────────────────────────────────
+# Které strany náměstí mají podloubí. Odečteno z fotografií na Wikimedia
+# Commons (CC BY-SA): severní a západní fronta je podloubená po celé délce,
+# na východní taky, jižní strana (Spořitelna, Hotel Slávie) podloubí nemá.
+# Volně stojící budova uprostřed náměstí ho nemá rovněž.
+ARCADE_SIDES = {'S': True, 'Z': True, 'V': True, 'J': False}
+
+
+def square_side(poly, sq_polys):
+    """Na které straně náměstí dům stojí — S/J/V/Z podle nejbližší hrany."""
+    cx = sum(p[0] for p in poly) / len(poly)
+    cz = sum(p[1] for p in poly) / len(poly)
+    best, bd = None, 1e9
+    for ring in sq_polys:
+        n = len(ring)
+        for i in range(n):
+            a, b = ring[i], ring[(i + 1) % n]
+            dx, dz = b[0] - a[0], b[1] - a[1]
+            L2 = dx * dx + dz * dz
+            t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((cx - a[0]) * dx + (cz - a[1]) * dz) / L2))
+            px, pz = a[0] + t * dx, a[1] + t * dz
+            d = math.hypot(cx - px, cz - pz)
+            if d < bd:
+                bd = d
+                # normála hrany otočená ven z náměstí (těžiště prstence ~ 0,0)
+                nx_, nz_ = -dz, dx
+                gx = sum(q[0] for q in ring) / n
+                gz = sum(q[1] for q in ring) / n
+                if (px - gx) * nx_ + (pz - gz) * nz_ < 0:
+                    nx_, nz_ = -nx_, -nz_
+                best = (nx_, nz_)
+    if not best:
+        return None
+    ang = math.degrees(math.atan2(best[1], best[0]))   # +x=0°, +z(jih)=90°
+    if -135 <= ang < -45: return 'S'
+    if -45 <= ang < 45:   return 'V'
+    if 45 <= ang < 135:   return 'J'
+    return 'Z'
+
+
+def landmark_overrides(name):
+    """Ověřené hodnoty pro konkrétní stavbu, jinak prázdno."""
+    L = LANDMARKS.get(name)
+    if not L:
+        return {}
+    out = {'tower': L.get('tower')}
+    for k in ('wall', 'roofcol', 'roof'):
+        if k in L:
+            out[k] = L[k]
+    return out
 
 
 def build_buildings(ways, rels, sq_polys):
@@ -257,7 +338,9 @@ def build_buildings(ways, rels, sq_polys):
             'kind': kind,
             'special': special_kind(tg, kind),
             'name': tg.get('name'),
+            **landmark_overrides(tg.get('name')),
             'sq': d < 16,            # dům ve frontě náměstí (viz předěl výše)
+            'side': square_side(pts, sq_polys) if d < 16 else None,
             'play': d < PLAY_R,      # uvnitř hratelné oblasti
             'd': round(d, 1),        # vzdálenost od náměstí
         })
@@ -342,8 +425,11 @@ def build_walls(ways):
         if tg.get('historic') == 'citywalls' or tg.get('barrier') == 'city_wall':
             pts = w['pts']
             if len(pts) < 2: continue
-            try: h = float(str(tg.get('height', '6')).replace('m', '').strip())
-            except ValueError: h = 6.0
+            # OSM u pelhřimovských hradeb výšku neuvádí. 3,5 m odpovídá tomu,
+            # co je na fotkách jádra vidět — zeď mezi domy a zahradami, ne
+            # obranná kurtina. Kdyby se výška do OSM doplnila, vezme se odtud.
+            try: h = float(str(tg.get('height', '3.5')).replace('m', '').strip())
+            except ValueError: h = 3.5
             out.append({'poly': [[round(p[0], 2), round(p[1], 2)] for p in pts],
                         'h': round(max(2.5, min(12, h)), 1), 'name': tg.get('name')})
     return out
@@ -540,6 +626,9 @@ def main():
     # přeznačit budovy podle skutečné hranice, ne podle holé vzdálenosti
     for b in world['buildings']:
         b['play'] = any(point_in_poly(p, world['boundary']) for p in b['poly'])
+        # podloubí jen na stranách, které ho podle fotek mají, a jen u domů
+        # dost hlubokých na to, aby se do nich dalo zakrojit
+        b['arcade'] = bool(b['sq'] and ARCADE_SIDES.get(b['side']) and min(b['L'], b['W']) > 8.5)
 
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(world, f, ensure_ascii=False, separators=(',', ':'))
@@ -550,6 +639,11 @@ def main():
     print(f"  budovy: {len(b)}  (v hratelné oblasti {sum(1 for x in b if x['play'])},"
           f" přímo na náměstí {sum(1 for x in b if x['sq'])})")
     print(f"  střechy: {dict(collections.Counter(x['roof'] for x in b))}")
+    tw = [x['name'] for x in b if x.get('tower')]
+    print(f"  věže podle fotografií: {', '.join(tw) if tw else 'žádné'}")
+    sides = collections.Counter(x['side'] for x in b if x['sq'])
+    print(f"  fronta náměstí po stranách: {dict(sides)}; podloubí: "
+          f"{sum(1 for x in b if x.get('arcade'))} domů")
     sp = collections.Counter(x['special'] for x in b if x['special'])
     print(f"  zvláštní stavby: {dict(sp)} — "
           + ', '.join(x['name'] or x['id'] for x in b if x['special']))

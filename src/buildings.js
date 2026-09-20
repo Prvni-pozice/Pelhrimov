@@ -32,6 +32,7 @@ const FOOT = 3                // kolik buněk zdi pokračuje pod terén
 
 const B_OMITKA = 10, B_SOKL = 11, B_STRECHA = 13, B_HREBEN = 14, B_RIMSA = 15
 const B_SKLO = 16, B_RAM = 17, B_DVERE = 18, B_STIT = 21, B_JADRO = 12, B_PLECH = 20
+const B_MEDENKA = 22
 const B_KAMEN = 12
 
 function hexRGB(h) { return [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255] }
@@ -94,7 +95,7 @@ export function buildHouse(b, ter, front, detail, through) {
   const levels = b.levels
   const eaveC = floorC + G_CELLS + (levels - 1) * F_CELLS
   const roofC = Math.max(1, Math.round(b.rh / VOX))
-  const ny = eaveC + roofC + 4 + (b.special ? Math.round(46 / VOX) : 0)
+  const ny = eaveC + roofC + 4 + (b.tower ? Math.round((b.tower.h + b.tower.side * 5 + 6) / VOX) : 0)
 
   const g = new Uint8Array(nx * ny * nz)
   const at = (x, y, z) => x + nx * (z + nz * y)
@@ -173,6 +174,16 @@ export function buildHouse(b, ter, front, detail, through) {
     }
   }
 
+  // ── 3b. podloubí ──
+  let collidePoly = poly
+  if (b.arcade && front) {
+    const clipped = carveArcade(b, {
+      set, get, M, nx, nz, ou, ov, uc, vc, floorC,
+      front: toLocal(front[0], front[1]), toWorld, lp,
+    })
+    if (clipped) collidePoly = clipped
+  }
+
   // ── 4. římsa ── vystupuje o buňku z líce, dělá stín a dělí zeď od střechy
   for (const w of wall) {
     set(w.i, eaveC, w.j, B_RIMSA)
@@ -185,8 +196,8 @@ export function buildHouse(b, ter, front, detail, through) {
   buildRoof(b, { set, M, nx, nz, ou, ov, uc, vc, eaveC, roofC })
 
   // ── 5b. věže ──
-  if (b.special) {
-    buildTower(b, { set, M, nx, nz, ou, ov, uc, vc, floorC, eaveC, ny, levels })
+  if (b.tower) {
+    buildTower(b, { set, M, nx, nz, ou, ov, uc, vc, floorC, eaveC, ny })
   }
 
   // ── 5c. průjezd branou ──
@@ -248,6 +259,8 @@ export function buildHouse(b, ter, front, detail, through) {
   }
   mesh.floorY = y0 + floorC * VOX
   mesh.eaveY = y0 + eaveC * VOX
+  // Do podloubí se musí dát vejít, takže kolizní obrys je o jeho hloubku menší.
+  mesh.collide = collidePoly
   return mesh
 }
 
@@ -289,105 +302,221 @@ function buildRoof(b, C) {
       for (let y = 1; y < h; y++) set(i, eaveC + y, j, gableEdge ? B_STIT : B_STRECHA)
       set(i, eaveC + h, j, h >= roofC ? B_HREBEN : B_STRECHA)
 
-      // Renesanční štít domů na náměstí.
-      //
-      // Měšťanské domy na Masarykově náměstí stojí na hlubokých parcelách,
-      // takže hřeben míří od náměstí pryč a do náměstí kouká štítová stěna.
-      // Holý trojúhelník krytiny je na ní to nejméně zajímavé; zdivo se proto
-      // vytáhne o kus nad střechu a po spádu se odstupňuje římsou. Je to ta
-      // zubatá silueta, podle které se náměstí pozná.
-      if (b.sq && b.roof === 'gable' && M(i, j)) {
+    }
+  }
+
+  // ── štíty domů na náměstí: samostatný průchod ──
+  //
+  // Musí běžet AŽ PO celé střeše. Když se štít stavěl uvnitř téže smyčky,
+  // přepsal ho pak roofovací zápis sousední buňky a výsledek závisel na tom,
+  // kterým směrem štít kouká — polovina domů měla místo omítnutého štítu
+  // oranžový trojúhelník krytiny.
+  if (b.sq && b.roof === 'gable') {
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        if (!M(i, j)) continue
         const out = !M(i - 1, j) ? -1 : (!M(i + 1, j) ? 1 : 0)
-        if (out !== 0) {
-          set(i, eaveC + h + 1, j, B_STIT)               // atika nad krytinou
-          for (let y = 2; y <= h; y++) {
-            if (y % 3 !== 0) continue
-            set(i, eaveC + y, j, B_RIMSA)
-            set(i + out, eaveC + y, j, B_RIMSA)          // odsazený stupeň
-          }
+        if (out === 0) continue
+        const h = prof(ou + (i + 0.5) * VOX - uc, ov + (j + 0.5) * VOX - vc)
+        if (h <= 2) continue
+        const hs = Math.max(1, 3 * Math.floor(h / 3))   // schod pod vrcholem
+        // Zeď se staví i o buňku PŘED líc: střecha má přes půdorys buňku
+        // přesahu a bez toho by štít překryla.
+        for (let y = 1; y <= hs; y++) {
+          set(i, eaveC + y, j, B_STIT)
+          set(i + out, eaveC + y, j, B_STIT)
         }
+        set(i, eaveC + hs + 1, j, B_RIMSA)              // krycí deska schodu
+        set(i + out, eaveC + hs + 1, j, B_RIMSA)
       }
     }
   }
 }
 
+// ── podloubí ──────────────────────────────────────────────────────────
+const ARC_DEPTH = 6     // 3,0 m — hloubka podloubí
+const ARC_TOP = 7       // 3,5 m — vrchol oblouku (přízemí má 4 m)
+const ARC_SPAN = 8      // rozteč pilířů, 4 m
+const ARC_PIER = 2      // šířka pilíře, 1 m
+
 /**
- * Věž ke kostelu, bráně nebo zámku.
+ * Vykrojí do přízemí podloubí a vrátí zmenšený půdorys pro kolize.
  *
- * Postaví se dovnitř půdorysu na jeho konec (u kostela na konec lodi, u brány
- * doprostřed) a probourá střechu nad sebou. Bez věží má jádro siluetu jako
- * každé jiné město — teprve ony z toho udělají Pelhřimov, který je poznat
- * z dálky.
+ * Podloubí je na Masarykově náměstí to nejnápadnější — kamenné sloupy nesou
+ * půlkruhové oblouky a za nimi je krytý chodník s obchody. Dělá se skutečným
+ * odebráním hmoty, ne nalepenou fasádou, takže se pod ním dá projít; proto se
+ * musí zmenšit i kolizní obrys, jinak by hráč narazil do něčeho, co vidí jako
+ * průchod.
+ *
+ * @returns {?Array} zmenšený půdorys ve světových souřadnicích
+ */
+function carveArcade(b, C) {
+  const { set, get, M, nx, nz, ou, ov, uc, vc, floorC, front, toWorld, lp } = C
+
+  // Která strana domu kouká na náměstí: ta, jejíž vnější směr míří k `front`.
+  const du = front[0] - uc, dv = front[1] - vc
+  const alongU = Math.abs(du) < Math.abs(dv)     // fasáda kolmá na v?
+  const sign = (alongU ? dv : du) > 0 ? 1 : -1
+
+  // Pro každou linii kolmou k fasádě najdi krajní buňku a zakroj dovnitř.
+  const outer = new Int16Array(alongU ? nx : nz).fill(-1)
+  const N1 = alongU ? nx : nz, N2 = alongU ? nz : nx
+  const cell = (a, bIdx) => alongU ? M(a, bIdx) : M(bIdx, a)
+  const put = (a, y, bIdx, v) => alongU ? set(a, y, bIdx, v) : set(bIdx, y, a, v)
+  for (let a = 0; a < N1; a++) {
+    for (let k = 0; k < N2; k++) {
+      const bIdx = sign > 0 ? N2 - 1 - k : k
+      if (cell(a, bIdx)) { outer[a] = bIdx; break }
+    }
+  }
+
+  // střed fasády v buňkách, aby oblouky vyšly symetricky
+  const centre = Math.round(((alongU ? uc - ou : vc - ov)) / VOX)
+  let carved = 0
+  for (let a = 0; a < N1; a++) {
+    const o = outer[a]
+    if (o < 0) continue
+    // je dům v téhle linii dost hluboký?
+    let depth = 0
+    for (let d = 0; d < ARC_DEPTH + 2; d++) {
+      if (!cell(a, o - sign * d)) break
+      depth++
+    }
+    if (depth <= ARC_DEPTH) continue
+
+    const t = ((a - centre) % ARC_SPAN + ARC_SPAN + ARC_SPAN / 2) % ARC_SPAN - ARC_SPAN / 2
+    const pier = Math.abs(t) > (ARC_SPAN - ARC_PIER) / 2
+
+    for (let d = 0; d < ARC_DEPTH; d++) {
+      const bIdx = o - sign * d
+      for (let y = floorC + 1; y <= floorC + ARC_TOP; y++) put(a, y, bIdx, 0)
+      put(a, floorC, bIdx, 8)          // dlažba pod podloubím
+    }
+    carved++
+
+    if (pier) {
+      // kamenný sloup v líci fasády
+      for (let y = floorC + 1; y <= floorC + ARC_TOP; y++) put(a, y, o, B_KAMEN)
+    } else {
+      // Půlkruhový oblouk. Bílý je jen samotný klenební pás (dvě buňky),
+      // plocha nad ním zůstává v barvě fasády — přesně tak to na náměstí
+      // vypadá a teprve tím je oblouk na dálku poznat. Vyplnit celé pole
+      // bílou znamenalo, že otvor vypadal hranatě.
+      const R = (ARC_SPAN - ARC_PIER) / 2
+      const rise = Math.round(Math.sqrt(Math.max(0, R * R - t * t)))
+      const yArch = floorC + ARC_TOP - R + rise
+      for (let y = yArch; y <= floorC + ARC_TOP; y++) {
+        put(a, y, o, y <= yArch + 1 ? B_RIMSA : B_OMITKA)
+      }
+      // výkladec v zadní stěně podloubí
+      const back = o - sign * ARC_DEPTH
+      if (cell(a, back)) {
+        const isDoor = Math.abs(t) < 1
+        for (let y = floorC + 1; y <= floorC + 5; y++) {
+          if (isDoor || y >= floorC + 2) put(a, y, back, isDoor ? B_DVERE : B_SKLO)
+        }
+      }
+    }
+  }
+  if (carved < 3) return null
+
+  // ── zmenšený půdorys pro kolize ──
+  // Ořízneme mnohoúhelník polorovinou posunutou o hloubku podloubí dovnitř.
+  const axis = alongU ? 1 : 0
+  let lim = sign > 0 ? -1e9 : 1e9
+  for (const p of lp) lim = sign > 0 ? Math.max(lim, p[axis]) : Math.min(lim, p[axis])
+  lim -= sign * ARC_DEPTH * VOX
+  const inside = (p) => sign > 0 ? p[axis] <= lim : p[axis] >= lim
+  const out = []
+  for (let i = 0; i < lp.length; i++) {
+    const a = lp[i], c = lp[(i + 1) % lp.length]
+    const ia = inside(a), ic = inside(c)
+    if (ia) out.push(a)
+    if (ia !== ic) {
+      const t2 = (lim - a[axis]) / (c[axis] - a[axis])
+      const cut = [a[0] + (c[0] - a[0]) * t2, a[1] + (c[1] - a[1]) * t2]
+      out.push(cut)
+    }
+  }
+  if (out.length < 3) return null
+  return out.map(p => toWorld(p[0], p[1]))
+}
+
+/**
+ * Věž ke kostelu nebo bráně.
+ *
+ * Rozměry NEODHADUJE — bere je z dat (`b.tower`), kde jsou odečtené z fotek
+ * konkrétní stavby. Paušální odhad tu byl dřív a dělal ze Solní brány
+ * sedmnáctimetrovou věž, ačkoli je to nízký patrový domek; teď žádnou
+ * nedostane, protože ji v datech nemá.
+ *
+ * Věž se postaví dovnitř půdorysu (u kostela na konec lodi, u brány doprostřed)
+ * a probourá střechu nad sebou.
  */
 function buildTower(b, C) {
   const { set, M, nx, nz, ou, ov, uc, vc, floorC, eaveC, ny } = C
-  const SPEC = {
-    church: { side: 5.0, h: 34, roof: 'spire', end: true },
-    gate:   { side: 7.0, h: 17, roof: 'hip', end: false },
-    castle: { side: 5.0, h: 20, roof: 'hip', end: true },
-  }
-  const sp = SPEC[b.special]
-  if (!sp) return
-  const half = Math.round(sp.side / 2 / VOX)
+  const T = b.tower
+  const atEnd = b.special === 'church'
+  const iC = Math.round((uc - ou) / VOX), jC = Math.round((vc - ov) / VOX)
 
-  // střed věže: u kostela na konci lodi, jinak v těžišti půdorysu
-  let ci = 0, cj = 0
-  if (sp.end) {
-    // projdi podél osy u od kraje a vezmi první místo, kam se věž vejde celá
-    const iC = Math.round((uc - ou) / VOX), jC = Math.round((vc - ov) / VOX)
-    let found = false
-    for (let d = 0; d < nx && !found; d++) {
-      for (const i of [half + d, nx - 1 - half - d]) {
-        if (i < half || i >= nx - half) continue
-        if (fits(M, i, jC, half)) { ci = i; cj = jC; found = true; break }
+  // Požadovanou stranu zmenšujeme, dokud se čtverec do půdorysu nevejde.
+  // Dolní brána má půdorys 10,9 × 10,9 m, ale obrys není přesně v mřížce —
+  // bez tohoto ústupku se devítimetrová věž nevešla a brána zůstala bez ní.
+  let half = 0, ci = 0, cj = 0
+  for (let h = Math.max(2, Math.round(T.side / 2 / VOX)); h >= 4; h--) {
+    if (atEnd) {
+      let found = false
+      for (let d = 0; d < nx && !found; d++) {
+        for (const i of [h + d, nx - 1 - h - d]) {
+          if (i < h || i >= nx - h) continue
+          if (fits(M, i, jC, h)) { half = h; ci = i; cj = jC; found = true; break }
+        }
       }
+      if (found) break
+    } else if (fits(M, iC, jC, h)) {
+      half = h; ci = iC; cj = jC; break
     }
-    if (!found) return
-  } else {
-    ci = Math.round((uc - ou) / VOX); cj = Math.round((vc - ov) / VOX)
-    if (!fits(M, ci, cj, half)) return
   }
+  if (!half) return
 
-  const topC = Math.min(ny - 14, floorC + Math.round(sp.h / VOX))
+  const topC = Math.min(ny - Math.round(30 / VOX), floorC + Math.round(T.h / VOX))
   if (topC <= eaveC + 2) return
 
   for (let j = -half; j <= half; j++) {
     for (let i = -half; i <= half; i++) {
       const edge = Math.abs(i) === half || Math.abs(j) === half
-      for (let y = floorC; y < topC; y++) {
-        set(ci + i, y, cj + j, edge ? B_OMITKA : B_JADRO)
-      }
-      // zvonicové okno na každé straně těsně pod římsou
+      for (let y = floorC; y < topC; y++) set(ci + i, y, cj + j, edge ? B_OMITKA : B_JADRO)
+      // střílny a okna po výšce dříku, nahoře ciferník hodin
       if (edge && (Math.abs(i) < half - 1 || Math.abs(j) < half - 1)) {
-        for (let y = topC - 6; y < topC - 2; y++) set(ci + i, y, cj + j, B_SKLO)
+        for (let y = floorC + 8; y < topC - 4; y += 8) { set(ci + i, y, cj + j, B_SKLO) }
+        for (let y = topC - 4; y < topC - 1; y++) set(ci + i, y, cj + j, B_SKLO)
       }
     }
   }
-  // římsa věže
   for (let j = -half - 1; j <= half + 1; j++) {
     for (let i = -half - 1; i <= half + 1; i++) set(ci + i, topC, cj + j, B_RIMSA)
   }
 
-  if (sp.roof === 'spire') {
-    // štíhlá jehla: čtverec se zmenšuje po vrstvách, nahoře makovice
-    const H = half * 5
-    for (let y = 1; y <= H; y++) {
-      const r = Math.max(0, Math.round(half * (1 - y / H)))
-      for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
-        set(ci + i, topC + y, cj + j, B_PLECH)
-      }
-    }
-    set(ci, topC + H + 1, cj, B_RIMSA)
-    set(ci, topC + H + 2, cj, B_RIMSA)
-  } else {
-    const H = half + 2
-    for (let y = 1; y <= H; y++) {
-      const r = Math.max(0, half - Math.round((y / H) * half))
-      for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
-        set(ci + i, topC + y, cj + j, B_STRECHA)
-      }
+  // ── střecha věže ──
+  const H = T.roof === 'spire' ? Math.round(half * 4.8)
+          : T.roof === 'steep' ? Math.round(half * 2.2)
+          : Math.round(half * 1.6)
+  for (let y = 1; y <= H; y++) {
+    const r = Math.max(0, Math.round(half * (1 - y / (H + 1))))
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+      set(ci + i, topC + y, cj + j, T.roof === 'spire' ? B_PLECH : B_STRECHA)
     }
   }
+
+  // ── měděná lucerna na hřebeni ──
+  // Zelená měděnka nahoře je to, podle čeho se věž pozná přes celé město.
+  const LH = Math.round((T.lantern || 0) / VOX)
+  let y = topC + H + 1
+  for (let k = 0; k < LH; k++, y++) {
+    const r = k < LH * 0.45 ? 1 : 0
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) set(ci + i, y, cj + j, B_MEDENKA)
+  }
+  if (LH) set(ci, y, cj, B_MEDENKA)
 }
 
 function fits(M, i, j, half) {

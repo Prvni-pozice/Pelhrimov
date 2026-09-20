@@ -8,7 +8,7 @@ pěšky a hledá se deset pamětihodností.
 Grafika míří na Roblox, ne na Minecraft: matné plochy, čisté barvy, žádné
 textury. Objem dělá geometrie a spékané stínění v rozích.
 
-![Masarykovo náměstí z úrovně očí](docs/namesti.png)
+![Podloubí a renesanční štíty na Masarykově náměstí](docs/podloubi.png)
 ![Jádro z nadhledu](docs/nadhled.png)
 
 ```bash
@@ -59,12 +59,37 @@ do jádra město uzavřely.
 
 ![Průjezd Horní bránou](docs/brana.png)
 
+## Fasády podle fotografií
+
+Půdorys, patra a tvar střechy dává OpenStreetMap. Co OSM neví, je doplněné
+podle fotografií na **Wikimedia Commons** (vše CC BY / CC BY-SA), ne odhadem:
+
+* **Podloubí** — severní, západní a východní fronta náměstí ho má po celé
+  délce, jižní (Spořitelna, Hotel Slávie) ne. Dělá se skutečným odebráním
+  hmoty z přízemí, ne nalepenou fasádou, takže se pod ním dá projít —
+  a proto je o jeho hloubku zmenšený i kolizní obrys domu.
+* **Renesanční štíty** — domy stojí na hlubokých parcelách, hřeben míří od
+  náměstí pryč a do náměstí kouká štítová stěna. Ta se vytáhne nad krytinu
+  a její obrys se odstupňuje.
+* **Výšky dominant** — OSM u nich nemá žádnou výšku a paušální odhad byl
+  špatně. Dolní (Jihlavská) brána je vysoká věž (~36 m) s měděnou lucernou,
+  Horní (Rynárecká) brána nižší věž s ochozem, **Solní brána jen nízký
+  patrový domek** — ten dřív dostával sedmnáctimetrovou věž, kterou nemá.
+* **Barvy** — střechy jsou cihlově oranžové, ne hnědé; fasády pastelové.
+
+Hradby zůstávají skromné: OSM u nich neuvádí výšku ani tvar, takže se kreslí
+jako 3,5 m kamenná zeď. Zubaté cimbuří z prvního pokusu byl výmysl a u Solní
+brány z něj byl hrad, který tam nestojí.
+
+![Solní brána](docs/solni-brana.png)
+
 ## Odkud jsou data
 
 | Co | Zdroj | Licence |
 |---|---|---|
 | Půdorysy domů, patra, ulice, hradby, brány, zeleň | OpenStreetMap | ODbL |
 | Výškopis terénu | ČÚZK, DMR 5G (ArcGIS ImageServer) | otevřená data |
+| Podoba fasád, podloubí, výšky věží | fotografie na Wikimedia Commons (jen jako předloha, do hry se nekopírují) | CC BY / CC BY-SA |
 
 Obojí stahuje `scripts/build_world.py` a slévá do jednoho JSONu (~240 kB),
 ze kterého se svět voxelizuje až v prohlížeči. Surová data se cachují
@@ -106,6 +131,12 @@ střechu; sousední domy nemají voxely v zákrytu, což u Roblox vzhledu nevad�
 **Domy jsou plné, ne duté skořepiny.** Dovnitř se nedá a greedy mesher z plné
 hmoty udělá jen vnější plášť. Skořepina naopak generuje i vnitřní líc každé
 zdi — na 414 domech rozdíl 3,1 M vs. 0,6 M trojúhelníků.
+
+**Chodník jen v pásu kolem vozovek.** OSM v jádru chodníky skoro nemá, takže
+všechno mezi vozovkou a domem zůstávalo výchozí trávou — kolem náměstí z toho
+byly zelené dlaždice přesně tam, kde je dlažba. Plošné vydláždění celého jádra
+to přehnalo na druhou stranu a vydláždilo i dvorky. Dlažba se proto rozlije
+3 m od každé ulice a 8 m uvnitř jádra; dál zůstane zeleň.
 
 **Zpevněné plochy jsou spojité, tráva je schodovitá.** Náměstí klesá o 2,5 m;
 ve voxelových schodech z něj bylo terasovité hlediště. Dlažba a asfalt proto
