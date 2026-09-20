@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.vite/
+data/*.osm
+data/*.tif
+data/*.tiff
+logs/
+*.log
+.env
+.env.*
+*.local
+*.key
+*.pem
+secrets.json
+credentials.json
+__pycache__/
+*.pyc
+
+# generované obrázky — vyrábí je scripts/preview_*.py a scripts/shot.mjs
+data/*.png
+data/shots/
