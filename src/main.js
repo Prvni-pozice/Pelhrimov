@@ -2,10 +2,12 @@
 
 import * as THREE from 'three'
 import DATA from './data/pelhrimov.json' with { type: 'json' }
+import PROGRAM from './data/program.json' with { type: 'json' }
 import { buildWorld } from './world.js'
 import { Player, Input, EYE } from './player.js'
 import { Quests } from './quests.js'
 import { HUD } from './ui.js'
+import { Collectibles } from './collect.js'
 
 const msg = document.getElementById('msg')
 const bar = document.querySelector('#bar i')
@@ -61,7 +63,23 @@ document.getElementById('load').style.display = 'none'
 const player = new Player(world.terrain, world.collider, [6, 26, Math.PI])
 const input = new Input(renderer.domElement, player)
 const quests = new Quests(DATA, world.terrain)
-const hud = new HUD(DATA, quests)
+const collect = new Collectibles(PROGRAM, world.spots)
+const hud = new HUD(DATA, quests, collect)
+
+// ── listiny rozvěšené po podloubí a branách ──
+// Vlastní mesh na kus, ne slité do dílu: po sebrání musí zmizet. Při dvou
+// desítkách kusů je to zanedbatelné a ušetří to přestavování geometrie.
+const pickups = []
+{
+  const geo = new THREE.BoxGeometry(0.5, 0.7, 0.07)
+  for (const it of collect.items) {
+    const col = new THREE.Color(it.strana ? it.strana.barva : '#8aa2b8')
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col }))
+    mesh.position.set(it.x, it.y + 1.25, it.z)
+    scene.add(mesh)
+    pickups.push({ mesh, it, y0: it.y + 1.25 })
+  }
+}
 
 // Volná kamera (klávesa F) — pro kontrolu světa a pro snímky.
 let freeCam = false
@@ -143,8 +161,10 @@ renderer.setAnimationLoop(() => {
   } else {
     player.update(dt, cmd)
     player.applyTo(camera)
+    const got = collect.update(player.pos.x, player.pos.z, player.pos.y)
+    if (got) hud.showItem(got)
     const reached = quests.update(player.pos.x, player.pos.z)
-    if (reached) hud.show(reached)
+    if (reached && !got) hud.show(reached)
     hud.update(player.pos.x, player.pos.z, player.yaw)
   }
 
@@ -153,6 +173,14 @@ renderer.setAnimationLoop(() => {
   const c = camera.position
   sun.target.position.set(c.x, world.terrain.groundY(c.x, c.z), c.z)
   sun.position.set(c.x - 120, 190, c.z + 90)
+
+  // listiny se pomalu otáčejí a pohupují, ať jsou v šeru podloubí vidět
+  const now = clock.elapsedTime
+  for (const p of pickups) {
+    if (p.it.got) { if (p.mesh.visible) p.mesh.visible = false; continue }
+    p.mesh.rotation.y = now * 1.1
+    p.mesh.position.y = p.y0 + Math.sin(now * 2 + p.y0) * 0.09
+  }
 
   renderer.render(scene, camera)
 
@@ -168,4 +196,4 @@ renderer.setAnimationLoop(() => {
 // potřebuje hráče posouvat, aniž by existovala klávesnice.
 window.__ready = true
 window.__stats = () => ({ ...world.stats, fps: Math.round(fps) })
-window.__game = { player, quests, world, autoWalk: false }
+window.__game = { player, quests, collect, world, autoWalk: false }

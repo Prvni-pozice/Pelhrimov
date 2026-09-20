@@ -20,6 +20,38 @@ npm run plan       # kontrolní půdorysy do data/
 npm run build      # produkční build do dist/
 ```
 
+## Sbírání bodů volebního programu
+
+Po městě jsou rozvěšené **listiny** — v každém druhém poli podloubí a v průjezdu
+všech tří bran. Dohromady je úkrytů 59 (56 v podloubí, 3 v branách), takže se
+k nim nedá dostat jinak než obejít celé náměstí i všechny brány. HUD ukazuje
+počitadlo po stranách, celkový počet a běžící čas; šipka míří na nejbližší
+nesebranou listinu a na minimapě svítí jako tečky.
+
+**Obsah listin se nevymýšlí.** Bere se ze `src/data/program.json`:
+
+```json
+{ "id": "ods", "nazev": "ODS", "lidr": "Ladislav Med", "body": [
+    { "text": "…doslovný bod programu…", "zdroj": "https://…" } ] }
+```
+
+Dokud je `body` u všech stran prázdné, hra sbírá **ukázkové údaje o městě**
+z vlastních mapových dat a v HUD na to výslovně upozorňuje. Tři týdny před
+volbami je rozdíl mezi mapovým údajem a tím, co slibuje kandidátka, zásadní —
+proto to hra nesmí splývat a proto má každý bod povinný `zdroj`.
+
+Ověřené a doplněné: termín voleb (9. a 10. října 2026) a lídři tří kandidátek —
+ODS Ladislav Med, KDU-ČSL Karel Kratochvíl, Společně pro Pelhřimov (navrhující
+strana TOP 09) Zdeněk Jaroš. Samotné programové body zatím veřejně dostupné
+nejsou; jakmile budou, patří do `body` i se zdrojem.
+
+## Nasazení
+
+Statická stránka, žádný backend. Vercel si vystačí s `vercel.json` v repu:
+build `npm run build`, výstup `dist/`. **Python se při nasazení nespouští** —
+`src/data/pelhrimov.json` je v gitu hotový, `npm run world` je jen vývojářský
+krok, když se mají data přegenerovat.
+
 ## Ovládání
 
 | | |
@@ -133,6 +165,7 @@ src/world.js      složení scény po dílech 80 m, zátarasy, hranice, kolize
 src/collide.js    kolizní tělesa v mřížce
 src/player.js     chůze, gravitace, schody, klávesy a dotyk
 src/quests.js     deset pamětihodností a postup
+src/collect.js    listiny s body programu schované v podloubí a branách
 src/ui.js         HUD, šipka k cíli, minimapa, kartičky
 src/main.js       scéna, světlo, smyčka
 ```
@@ -184,6 +217,10 @@ lze podstrčit přes `PLAYWRIGHT_CORE`. `npm test` je nepotřebuje.
 
 Hotové: svět, chůze a kolize, hranice mapy se zátarasy, průchozí brány,
 podloubí a propracované fasády na náměstí i v ulicích k branám, deset úkolů,
-HUD s minimapou, ovládání na mobilu, test průchodnosti.
+sbírání listin s počitadlem a časem, HUD s minimapou, ovládání na mobilu,
+test průchodnosti i dosažitelnosti všech listin.
+
+Čeká na obsah: body volebních programů ODS, KDU-ČSL a Společně pro Pelhřimov
+v `src/data/program.json`.
 
 Co dál: zvuk, denní doba, žebříček časů, interiéry podloubí s obchody.

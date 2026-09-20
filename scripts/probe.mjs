@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import { buildWorld } from '../src/world.js'
 import { Player } from '../src/player.js'
 import { Quests } from '../src/quests.js'
+import { Collectibles } from '../src/collect.js'
 
 const DATA = JSON.parse(fs.readFileSync(new URL('../src/data/pelhrimov.json', import.meta.url), 'utf8'))
 const t0 = Date.now()
@@ -18,6 +19,8 @@ console.log(`svět postaven za ${Date.now() - t0} ms — ${world.stats.houses} d
           + `${world.stats.tris.toLocaleString('cs')} trojúhelníků`)
 
 const quests = new Quests(DATA, world.terrain)
+const PROGRAM = JSON.parse(fs.readFileSync(new URL('../src/data/program.json', import.meta.url), 'utf8'))
+const collect = new Collectibles(PROGRAM, world.spots)
 
 /**
  * Záplavové vyplnění průchozích míst.
@@ -96,6 +99,24 @@ for (const qt of quests.list) {
   console.log(`  ${ok ? 'OK  ' : 'NE  '}${qt.title}`)
 }
 
+// Listiny jsou schované v podloubí a v průjezdech bran. Kdyby se k některé
+// nedalo dojít, hra by se nedala dohrát — a nebylo by to vidět jinak než tím,
+// že hráč bloudí. Proto se kontroluje každá zvlášť.
+console.log(`\ndosažitelnost listin (${collect.demo ? 'ukázková data' : 'ostrá data'}):`)
+let badItems = 0
+for (const it of collect.items) {
+  let ok = false
+  for (let dz = -2; dz <= 2 && !ok; dz++) {
+    for (let dx = -2; dx <= 2 && !ok; dx++) {
+      const i = fl.I(it.x + dx), j = fl.I(it.z + dz)
+      if (i < 0 || j < 0 || i >= fl.W || j >= fl.W) continue
+      if (fl.seen[j * fl.W + i]) ok = true
+    }
+  }
+  if (!ok) { badItems++; console.log(`  NE  ${it.kde} (${it.x.toFixed(0)},${it.z.toFixed(0)})`) }
+}
+console.log(`  ${collect.total - badItems}/${collect.total} dosažitelných`)
+
 console.log(`\nprůchozí plocha: ${fl.count} m² dostupných z náměstí z ${freeCells} m² `
           + `volných uvnitř hranice (${Math.round(100 * fl.count / freeCells)} %). Zbytek jsou`
           + ` uzavřené dvorky za domy — to je v pořádku.`)
@@ -104,8 +125,12 @@ if (bad) {
   console.log(`\nSELHALO: ${bad} z ${quests.list.length} cílů není dostupných.`)
   process.exit(1)
 }
+if (badItems) {
+  console.log(`\nSELHALO: ${badItems} listin je zazděných, hra by se nedala dohrát.`)
+  process.exit(1)
+}
 if (fl.count / freeCells < 0.8) {
   console.log('\nSELHALO: město je rozpadlé na nespojené kusy.')
   process.exit(1)
 }
-console.log('\nv pořádku: svět je průchozí a všechny cíle se dají obejít.')
+console.log('\nv pořádku: svět je průchozí, cíle i listiny se dají posbírat.')

@@ -212,10 +212,11 @@ export function buildHouse(b, ter, front, detail, through) {
 
   // ── 3b. podloubí ──
   let collidePoly = poly
+  const spots = []
   if (b.arcade && front) {
     const clipped = carveArcade(b, {
       set, get, M, nx, nz, ou, ov, uc, vc, floorC,
-      front: toLocal(front[0], front[1]), toWorld, lp,
+      front: toLocal(front[0], front[1]), toWorld, lp, spots,
     })
     if (clipped) collidePoly = clipped
   }
@@ -241,6 +242,11 @@ export function buildHouse(b, ter, front, detail, through) {
   // a protože všechny tři stojí na jediných vstupech do jádra, uzavřela by
   // celé město. Průjezd vede po směru ulice, vysoký 4,5 m a široký 4 m.
   if (b.special === 'gate' && through) {
+    // Střed PRŮJEZDU, ne těžiště půdorysu. Průjezd se boural okolo středu
+    // obalového obdélníku (uc, vc) a u nepravidelné brány to je jinde než
+    // těžiště — listina pak skončila zazděná v pilíři.
+    const [gx, gz] = toWorld(uc, vc)
+    spots.push({ x: +gx.toFixed(2), z: +gz.toFixed(2), kind: 'brana', id: b.id, name: b.name })
     const tu = through[0] * ca + through[1] * sa      // směr ulice v soustavě domu
     const tv = -through[0] * sa + through[1] * ca
     const L = Math.hypot(tu, tv) || 1
@@ -297,6 +303,7 @@ export function buildHouse(b, ter, front, detail, through) {
   mesh.eaveY = y0 + eaveC * VOX
   // Do podloubí se musí dát vejít, takže kolizní obrys je o jeho hloubku menší.
   mesh.collide = collidePoly
+  mesh.spots = spots        // místa v podloubí a v průjezdech bran
   return mesh
 }
 
@@ -401,7 +408,7 @@ const ARC_PIER = 2      // šířka pilíře, 1 m
  * @returns {?Array} zmenšený půdorys ve světových souřadnicích
  */
 function carveArcade(b, C) {
-  const { set, get, M, nx, nz, ou, ov, uc, vc, floorC, front, toWorld, lp } = C
+  const { set, get, M, nx, nz, ou, ov, uc, vc, floorC, front, toWorld, lp, spots } = C
 
   // Která strana domu kouká na náměstí: ta, jejíž vnější směr míří k `front`.
   const du = front[0] - uc, dv = front[1] - vc
@@ -457,6 +464,14 @@ function carveArcade(b, C) {
       const yArch = floorC + ARC_TOP - R + rise
       for (let y = yArch; y <= floorC + ARC_TOP; y++) {
         put(a, y, o, y <= yArch + 1 ? B_RIMSA : B_OMITKA)
+      }
+      // střed pole podloubí — sem se dá schovat sběratelský předmět
+      if (spots && Math.abs(t) < 0.5) {
+        const mid = o - sign * Math.round(ARC_DEPTH / 2)
+        const lu = alongU ? ou + (a + 0.5) * VOX : ou + (mid + 0.5) * VOX
+        const lv = alongU ? ov + (mid + 0.5) * VOX : ov + (a + 0.5) * VOX
+        const [wx, wz] = toWorld(lu, lv)
+        spots.push({ x: +wx.toFixed(2), z: +wz.toFixed(2), kind: 'podloubi', id: b.id })
       }
       // výkladec v zadní stěně podloubí
       const back = o - sign * ARC_DEPTH

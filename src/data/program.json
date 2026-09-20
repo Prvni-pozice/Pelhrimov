@@ -1,0 +1,61 @@
+{
+  "_cti_me": [
+    "Body programů se NEVYMÝŠLEJÍ. Do pole 'body' patří jen text, který",
+    "opravdu vydala daná kandidátka, a ke každému bodu odkaz na zdroj.",
+    "Dokud je 'body' prázdné, hra sbírá ukázkové údaje o městě ze sekce",
+    "'ukazka' a v HUD to výslovně hlásí — aby si nikdo nespletl mapová data",
+    "s tím, co strany slibují. Tři týdny před volbami je to zásadní rozdíl."
+  ],
+  "obec": "Pelhřimov",
+  "volby": {
+    "typ": "komunální volby do zastupitelstva města",
+    "termin": "9. a 10. října 2026",
+    "zdroj": "https://pelhrimovsky.denik.cz/komunalni-volby/komunalni-volby-2026-pelhrimov-kandidati-termin-jak-volit/"
+  },
+  "strany": [
+    {
+      "id": "ods",
+      "nazev": "ODS",
+      "plnyNazev": "Občanská demokratická strana",
+      "lidr": "Ladislav Med",
+      "lidrPozn": "dosavadní starosta",
+      "barva": "#1e6fd9",
+      "zdrojKandidatky": "https://pelhrimovsky.denik.cz/komunalni-volby/komunalni-volby-2026-v-pelhrimove-devet-kandidatek-a-sedm-znamych-lidru/",
+      "body": []
+    },
+    {
+      "id": "kdu",
+      "nazev": "KDU-ČSL",
+      "plnyNazev": "Křesťanská a demokratická unie – Československá strana lidová",
+      "lidr": "Karel Kratochvíl",
+      "lidrPozn": "dosavadní místostarosta",
+      "barva": "#efb31a",
+      "zdrojKandidatky": "https://pelhrimovsky.denik.cz/komunalni-volby/komunalni-volby-2026-v-pelhrimove-devet-kandidatek-a-sedm-znamych-lidru/",
+      "body": []
+    },
+    {
+      "id": "spp",
+      "nazev": "Společně pro Pelhřimov",
+      "plnyNazev": "Společně pro Pelhřimov (navrhující strana TOP 09, s nezávislými kandidáty)",
+      "lidr": "Zdeněk Jaroš",
+      "lidrPozn": "dosavadní místostarosta, před čtyřmi lety lídr TOP 09",
+      "barva": "#7d3fb5",
+      "zdrojKandidatky": "https://pelhrimovsky.denik.cz/komunalni-volby/komunalni-volby-2026-v-pelhrimove-devet-kandidatek-a-sedm-znamych-lidru/",
+      "body": []
+    }
+  ],
+  "ukazka": [
+    "Masarykovo náměstí má přes 4 000 m² a napříč klesá o 2,5 metru.",
+    "Do historického jádra vedou tři brány: Solní, Horní a Dolní.",
+    "Dolní bráně se říká také Jihlavská a sídlí v ní Muzeum rekordů a kuriozit.",
+    "Horní brána má druhé jméno Rynárecká a dřevěný ochoz pod střechou.",
+    "Solní brána není věž, ale nízký průjezdní domek o dvou podlažích.",
+    "Kostel svatého Bartoloměje má nejvyšší věž ve městě.",
+    "Podloubí lemuje severní, západní a východní frontu náměstí; jižní ne.",
+    "Domy na náměstí stojí na hlubokých parcelách, proto do něj koukají štíty.",
+    "Jádro leží na hřbetu — terén v mapě stoupá z 486 na 517 metrů nad mořem.",
+    "Okruh kolem jádra tvoří Děkanská, Solní, Tylova, Poděbradova a Příkopy.",
+    "V hratelné části města stojí 194 domů, z toho 24 přímo na náměstí.",
+    "Kašna se sochou svatého Jakuba stojí uprostřed náměstí."
+  ]
+}

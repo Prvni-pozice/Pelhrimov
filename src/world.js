@@ -7,7 +7,7 @@
 
 import * as THREE from 'three'
 import { Terrain, CELL, STEP, segDist } from './terrain.js'
-import { Collider } from './collide.js'
+import { Collider, pointIn } from './collide.js'
 import { buildHouse, VOX } from './buildings.js'
 import { blockColor, isSolid } from './palette.js'
 import { greedyMesh, heightfieldMesh } from './voxel.js'
@@ -88,6 +88,7 @@ export async function buildWorld(data, onProgress = () => {}) {
   const hset = new ChunkSet(half)
   const fronts = frontPoints(data)
   const boxes = []
+  const spots = []        // úkryty v podloubí a v branách
   for (const b of data.buildings) {
     // Okna dostane každý dům. Kulisa bez nich byla dlouhá šedá zeď a na
     // konci ulice to vypadalo jako nedostavěné sídliště; portál a dveře
@@ -100,6 +101,10 @@ export async function buildWorld(data, onProgress = () => {}) {
     hset.add(mesh, cx / b.poly.length, cz / b.poly.length)
     boxes.push({ poly: mesh.collide || b.poly, shape: b.poly, top: mesh.eaveY,
                  name: b.name, id: b.id, sq: b.sq, special: b.special, through })
+    for (const sp of mesh.spots || []) {
+      sp.y = ter.groundY(sp.x, sp.z)
+      spots.push(sp)
+    }
     stats.houses++
   }
   const houseGroup = hset.build(material)
@@ -149,8 +154,17 @@ export async function buildWorld(data, onProgress = () => {}) {
 
   // ── kolize ──
   const col = new Collider(half)
+  // Solní brána je v OSM jen `building:part` uvnitř většího domu. Průjezd se
+  // probourá v ní, jenže obalový dům zůstával v kolizích celý a bránu zazdil —
+  // hráč viděl otevřený průjezd, kterým nešlo projít. Stejný průjezd se proto
+  // vyřízne i ze všech domů, které bránu překrývají.
+  const gates = boxes.filter(b => b.special === 'gate' && b.through)
+    .map(g => ({ ...g, c: centroid(g.shape || g.poly) }))
   for (const b of boxes) {
-    if (b.special === 'gate' && b.through) addGateColliders(col, b)
+    const g = gates.find(g => b.special === 'gate' && b.through
+      ? g.id === b.id
+      : pointIn(g.c[0], g.c[1], b.poly))
+    if (g) addGateColliders(col, b, g.c[0], g.c[1], g.through)
     else col.addPolygon(b.poly, b.top)
   }
   for (const w of data.walls) {
@@ -173,7 +187,7 @@ export async function buildWorld(data, onProgress = () => {}) {
     col.addSegment(bound[i], bound[(i + 1) % bound.length], 0.5)
   }
 
-  return { group, terrain: ter, boxes, collider: col, boundary: bound, stats }
+  return { group, terrain: ter, boxes, spots, collider: col, boundary: bound, stats }
 }
 
 /** Směr ulice, která prochází branou — podle nejbližšího silničního úseku. */
@@ -196,28 +210,45 @@ function roadDir(b, roads) {
 }
 
 /**
- * Kolize brány: místo celého půdorysu dva pilíře po stranách průjezdu.
- * Kdyby se přidal půdorys, brána by ulici zazdila a jádro by se uzavřelo.
+ * Kolize brány: místo celého půdorysu dvě křídla po stranách průjezdu.
+ *
+ * Půdorys se rozřízne rovinou průjezdu na dva kusy a do kolizí jdou jen ty.
+ * Kdyby se přidal celý, brána by ulici zazdila a jádro by se uzavřelo —
+ * všechny tři brány stojí na jediných vstupech do města.
  */
-function addGateColliders(col, b) {
-  const [tx, tz] = b.through
+function addGateColliders(col, b, cx, cz, through) {
+  const [tx, tz] = through
   const px = -tz, pz = tx                   // kolmice na ulici
-  let cx = 0, cz = 0
-  for (const p of b.poly) { cx += p[0]; cz += p[1] }
-  cx /= b.poly.length; cz /= b.poly.length
-  let maxT = 0, maxP = 0
-  for (const p of b.poly) {
-    maxT = Math.max(maxT, Math.abs((p[0] - cx) * tx + (p[1] - cz) * tz))
-    maxP = Math.max(maxP, Math.abs((p[0] - cx) * px + (p[1] - cz) * pz))
-  }
   const PW = 2.3                            // poloviční šířka průjezdu + vůle
-  if (maxP <= PW + 0.4) { col.addPolygon(b.poly, b.top); return }
-  for (const sgn of [-1, 1]) {
-    const a = PW * sgn, c = maxP * sgn
-    const quad = [[a, -maxT], [c, -maxT], [c, maxT], [a, maxT]].map(([u, v]) =>
-      [cx + px * u + tx * v, cz + pz * u + tz * v])
-    col.addPolygon(quad, b.top)
+  let maxP = 0
+  for (const p of b.poly) maxP = Math.max(maxP, Math.abs((p[0] - cx) * px + (p[1] - cz) * pz))
+  if (maxP <= PW + 0.4) return              // celý dům je průjezd, nic neblokuje
+  for (const side of [-1, 1]) {
+    const piece = clipHalf(b.poly, cx, cz, px * side, pz * side, PW)
+    if (piece.length >= 3) col.addPolygon(piece, b.top)
   }
+}
+
+/** Ořízne mnohoúhelník polorovinou (p−c)·n ≥ d. */
+function clipHalf(poly, cx, cz, nx, nz, d) {
+  const f = (p) => (p[0] - cx) * nx + (p[1] - cz) * nz - d
+  const out = []
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], c = poly[(i + 1) % poly.length]
+    const fa = f(a), fc = f(c)
+    if (fa >= 0) out.push(a)
+    if ((fa >= 0) !== (fc >= 0)) {
+      const t = fa / (fa - fc)
+      out.push([a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t])
+    }
+  }
+  return out
+}
+
+function centroid(poly) {
+  let x = 0, z = 0
+  for (const p of poly) { x += p[0]; z += p[1] }
+  return [x / poly.length, z / poly.length]
 }
 
 /** Kamenná zeď se zavřenými vraty napříč ulicí. */
