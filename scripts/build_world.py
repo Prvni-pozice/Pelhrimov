@@ -174,9 +174,12 @@ def simplify(pts, tol=0.35):
 # ── 4. vzhled domů ────────────────────────────────────────────────────
 # Paleta měšťanských fasád historického jádra: tlumené pastely + bílá.
 # Roblox look = sytější a čistší barvy než realita, ale pořád "česká pastelka".
-WALL_PALETTE = ['#f6e7c0', '#f8f0dc', '#edc98f', '#e8b878', '#d6e0bc', '#bcd6e2',
-                '#f6cfc0', '#e2c6d6', '#eee9dd', '#fbf6e8', '#d8c9a4', '#f0d9a8',
-                '#cfdcc4', '#e8d0b0', '#c9d9e6', '#f2ddc8']
+# Odstíny odečtené z fotek náměstí (Commons, CC BY-SA): hořčicová žlutá,
+# šalvějová zeleň, lososová, mátová, okr. Pastely z prvního pokusu byly tak
+# vybledlé, že celé náměstí splývalo do béžové.
+WALL_PALETTE = ['#e8c65a', '#c3cfc0', '#e0917c', '#b7dcc9', '#eddfb4', '#dcc9d6',
+                '#f0dc9a', '#d3c3a0', '#e7b98c', '#cfd9e0', '#f2e3ae', '#d9bfae',
+                '#bfd3c2', '#e9cfa0', '#c9d2dd', '#efd9c2']
 # Na fotkách náměstí jsou střechy jasně cihlově oranžové, ne hnědé — tlumená
 # paleta z prvního pokusu dělala z Pelhřimova podzimní kulisu.
 ROOF_PALETTE = ['#c45f39', '#b85535', '#d06c42', '#a85030', '#c96540', '#b45a3c',
@@ -189,13 +192,26 @@ def seeded(sid, palette):
         h = ((h ^ ord(ch)) * 16777619) & 0xFFFFFFFF
     return palette[h % len(palette)]
 
-def roof_shape(tags, L, W, kind):
+def area_kind(kind, area):
+    """Velká veřejná stavba — hřeben vede podél ulice, ne do hloubky parcely."""
+    return area > 420 and kind in ('civic', 'commercial', 'retail', 'hotel', 'public', 'office')
+
+
+def roof_shape(tags, L, W, kind, area):
+    """Tvar střechy. OSM ho uvádí u 35 budov z 1566, zbytek je odhad.
+
+    Sedlovka s hřebenem kolmo na ulici sedí na měšťanský dům na hluboké
+    parcele. Na velký blok banky, spořitelny nebo hotelu ne — ty mají hřeben
+    podél ulice, a odhad podle poměru stran je dělal stejné jako sousedy.
+    """
     s = tags.get('roof:shape')
-    if s in ('flat', 'gabled', 'hipped', 'pyramidal', 'skillion', 'half-hipped'):
+    if s in ('flat', 'gabled', 'hipped', 'pyramidal', 'skillion', 'half-hipped', 'mansard'):
         return {'gabled': 'gable', 'half-hipped': 'gable'}.get(s, s)
     if kind in ('garage', 'warehouse', 'industrial', 'roof', 'carport'): return 'flat'
     if kind == 'church': return 'gable'
     if W < 4.5: return 'skillion'
+    if area > 420 and kind in ('civic', 'commercial', 'retail', 'hotel', 'public', 'office'):
+        return 'hipped'
     return 'gable' if L / max(W, 0.1) > 1.25 else 'hipped'
 
 # ── ověřené rozměry dominant ────────────────────────────────────────
@@ -242,11 +258,17 @@ def special_kind(tags, kind):
 
 
 # ── podloubí ────────────────────────────────────────────────────────
-# Které strany náměstí mají podloubí. Odečteno z fotografií na Wikimedia
-# Commons (CC BY-SA): severní a západní fronta je podloubená po celé délce,
-# na východní taky, jižní strana (Spořitelna, Hotel Slávie) podloubí nemá.
-# Volně stojící budova uprostřed náměstí ho nemá rovněž.
-ARCADE_SIDES = {'S': True, 'Z': True, 'V': True, 'J': False}
+# Podloubí se NEODHADUJE podle strany náměstí. První pokus ho dával celé
+# frontě kromě jižní strany a pletl se: Komerční banka ani čp. 78 a 79 ho
+# nemají, přestože na "podloubené" straně stojí.
+#
+# Bere se ze dvou tvrdých zdrojů:
+#   1. OSM cesta s covered=arcade — 69 m dlouhá fronta na severozápadě,
+#      jediné podloubí, které je v mapě opravdu zakreslené
+#   2. src/data/domy.json — ruční záznamy, každý se zdrojem
+# Co není doloženo, podloubí nedostane. Chybějící podloubí je menší chyba
+# než vymyšlené.
+ARCADE_NEAR = 8.0      # metrů od zakreslené cesty s podloubím
 
 
 def square_side(poly, sq_polys):
@@ -279,6 +301,27 @@ def square_side(poly, sq_polys):
     if -45 <= ang < 45:   return 'V'
     if 45 <= ang < 135:   return 'J'
     return 'Z'
+
+
+def arcade_ways(ways):
+    """Geometrie cest označených v OSM jako podloubí (covered=arcade)."""
+    out = []
+    for w in ways.values():
+        if w['tags'].get('covered') == 'arcade' and len(w['pts']) >= 2:
+            out.append(w['pts'])
+    return out
+
+
+def load_manual():
+    """Ruční údaje o domech ze src/data/domy.json (každý se zdrojem)."""
+    path = os.path.join(ROOT, 'src', 'data', 'domy.json')
+    if not os.path.exists(path):
+        return {}
+    d = json.load(open(path, encoding='utf-8'))
+    bad = [k for k, v in d.get('domy', {}).items() if 'zdroj' not in v]
+    if bad:
+        sys.exit(f'domy.json: záznamy bez zdroje: {bad}')
+    return d.get('domy', {})
 
 
 def landmark_overrides(name):
@@ -320,8 +363,13 @@ def build_buildings(ways, rels, sq_polys):
             try: eave = max(2.5, float(str(tg['height']).replace('m', '').strip()))
             except ValueError: pass
 
-        shape = roof_shape(tg, L, W, kind)
-        rh = 0.6 if shape == 'flat' else min(7.5, max(2.2, W * 0.42))
+        shape = roof_shape(tg, L, W, kind, A)
+        front_ridge = shape in ('hipped', 'mansard') and area_kind(kind, A)
+        # U hřebene podél ulice se střecha rozpíná přes hloubku parcely, ne
+        # přes šířku domu — počítat rozpon z W by z ní udělalo horu.
+        rh = (0.6 if shape == 'flat'
+              else min(6.0, max(2.5, min(L, W) * 0.40)) if front_ridge
+              else min(7.5, max(2.2, W * 0.42)))
         if kind == 'church': rh = max(rh, 8.0)
 
         # Vzdálenost měříme od NEJBLIŽŠÍHO rohu domu, ne od těžiště — náměstí je
@@ -334,6 +382,7 @@ def build_buildings(ways, rels, sq_polys):
             'a': round(ang, 4), 'L': round(L, 2), 'W': round(W, 2),
             'levels': levels, 'eave': round(eave, 2),
             'roof': shape, 'rh': round(rh, 2),
+            'ridge': 'front' if front_ridge else 'long',
             'wall': seeded(wid, WALL_PALETTE), 'roofcol': seeded(wid + 'r', ROOF_PALETTE),
             'kind': kind,
             'special': special_kind(tg, kind),
@@ -687,6 +736,8 @@ def main():
         'pois': build_pois(nodes, ntags, ways),
         'attribution': 'Budovy a ulice © přispěvatelé OpenStreetMap (ODbL). Výškopis © ČÚZK, DMR 5G.',
     }
+    arcs = arcade_ways(ways)
+    arc_segs = [(a, b2) for line in arcs for a, b2 in zip(line, line[1:])]
     gates = [p for p in world['pois'] if p['k'] == 'gate']
     world['boundary'] = boundary_ring(sq, gates)
     world['barriers'] = crossings(world['roads'], world['boundary'])
@@ -695,7 +746,24 @@ def main():
         b['play'] = any(point_in_poly(p, world['boundary']) for p in b['poly'])
         # podloubí jen na stranách, které ho podle fotek mají, a jen u domů
         # dost hlubokých na to, aby se do nich dalo zakrojit
-        b['arcade'] = bool(b['sq'] and ARCADE_SIDES.get(b['side']) and min(b['L'], b['W']) > 8.5)
+        near = min((min(dist_point_seg(p, a, c) for a, c in arc_segs) for p in b['poly']),
+                   default=1e9) if arc_segs else 1e9
+        b['arcade'] = bool(b['sq'] and near < ARCADE_NEAR and min(b['L'], b['W']) > 8.5)
+
+    # Ruční údaje přebijí všechno odvozené — a jen ty mají zdroj.
+    manual = load_manual()
+    for b in world['buildings']:
+        m = manual.get(b['id'])
+        if not m:
+            continue
+        for k in ('levels', 'roof', 'ridge', 'arcade', 'wall', 'roofcol'):
+            if k in m:
+                b[k] = m[k]
+        if 'nazev' in m and not b.get('name'):
+            b['name'] = m['nazev']
+        b['rucne'] = True
+        if 'levels' in m:
+            b['eave'] = round(GROUND_H + (m['levels'] - 1) * LEVEL_H, 2)
 
     # Domy s propracovanou fasádou: fronta náměstí a domy v ulicích k branám.
     routes = routes_to_gates(world['roads'], sq, gates)
@@ -719,6 +787,8 @@ def main():
     print(f"  budovy: {len(b)}  (v hratelné oblasti {sum(1 for x in b if x['play'])},"
           f" přímo na náměstí {sum(1 for x in b if x['sq'])})")
     print(f"  střechy: {dict(collections.Counter(x['roof'] for x in b))}")
+    print(f"  hřeben podél ulice: {sum(1 for x in b if x.get('ridge') == 'front')} budov")
+    print(f"  ruční údaje se zdrojem: {sum(1 for x in b if x.get('rucne'))} budov")
     tw = [x['name'] for x in b if x.get('tower')]
     print(f"  věže podle fotografií: {', '.join(tw) if tw else 'žádné'}")
     print(f"  propracované fasády: {sum(1 for x in b if x.get('rich'))} domů "

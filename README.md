@@ -96,10 +96,14 @@ do jádra město uzavřely.
 Půdorys, patra a tvar střechy dává OpenStreetMap. Co OSM neví, je doplněné
 podle fotografií na **Wikimedia Commons** (vše CC BY / CC BY-SA), ne odhadem:
 
-* **Podloubí** — severní, západní a východní fronta náměstí ho má po celé
-  délce, jižní (Spořitelna, Hotel Slávie) ne. Dělá se skutečným odebráním
-  hmoty z přízemí, ne nalepenou fasádou, takže se pod ním dá projít —
-  a proto je o jeho hloubku zmenšený i kolizní obrys domu.
+* **Podloubí** se neodhaduje podle strany náměstí. Odhad "celá fronta kromě
+  jižní strany" se pletl — Komerční banka ani čp. 78 a 79 podloubí nemají,
+  přestože na "podloubené" straně stojí. Bere se ze dvou tvrdých zdrojů:
+  OSM cesty s `covered=arcade` (69 m dlouhá fronta čp. 1–6) a ručních
+  záznamů v `src/data/domy.json`. Co není doloženo, podloubí nedostane —
+  chybějící podloubí je menší chyba než vymyšlené. Dělá se skutečným
+  odebráním hmoty z přízemí, takže se pod ním dá projít, a proto je o jeho
+  hloubku zmenšený i kolizní obrys domu.
 * **Renesanční štíty** — domy stojí na hlubokých parcelách, hřeben míří od
   náměstí pryč a do náměstí kouká štítová stěna. Ta se vytáhne nad krytinu
   a její obrys se odstupňuje.
@@ -108,6 +112,23 @@ podle fotografií na **Wikimedia Commons** (vše CC BY / CC BY-SA), ne odhadem:
   Horní (Rynárecká) brána nižší věž s ochozem, **Solní brána jen nízký
   patrový domek** — ten dřív dostával sedmnáctimetrovou věž, kterou nemá.
 * **Barvy** — střechy jsou cihlově oranžové, ne hnědé; fasády pastelové.
+
+### Údaje po jednotlivých domech
+
+OSM uvádí tvar střechy u 35 budov z 1566 — zbytek je odhad z poměru stran
+půdorysu. Na měšťanský dům na hluboké parcele sedí (hřeben kolmo k náměstí,
+do něj kouká štít), na blok banky nebo hotelu ne. Proto:
+
+* velká veřejná stavba (nad 420 m², `civic`/`commercial`/`hotel`/…) dostane
+  valbovou střechu s **hřebenem podél ulice**, ne sedlovku do hloubky parcely,
+* `src/data/domy.json` drží ruční záznamy pro konkrétní domy — počet pater,
+  tvar střechy, směr hřebene, podloubí, barvy. **Každý záznam musí mít
+  `zdroj`**, jinak build spadne. Dnes je jich 13: Komerční banka, Česká
+  spořitelna, Hotel Slávie, čp. 78 a 79 a osm domů podloubené fronty.
+
+Tak se opravila Komerční banka: měla sedlovku jako měšťanský dům, podloubí,
+které nemá, a barvu z pastelové palety. Teď je to šedý blok s valbovou
+střechou podél náměstí.
 
 ### Dvě úrovně detailu fasády
 

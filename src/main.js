@@ -107,6 +107,8 @@ const VIEWS = {
   rada:     { p: [0, 2.0, -6],    yaw: Math.PI,        pitch: 0.10 },
   rada2:    { p: [10, 2.0, 6],    yaw: Math.PI * 0.62, pitch: 0.10 },
   stit:     { p: [-10, 2.0, -18],  yaw: Math.PI,       pitch: 0.42 },
+  banka:    { p: [12, 2.2, -16],  yaw: 2.50,           pitch: 0.16 },
+  podloubi_s: { p: [-13.6, 2.0, -25.9], yaw: -2.66,    pitch: 0.14 },
   ulice_k_brane: { p: [-4.0, 1.9, 44.6], yaw: -0.265,  pitch: 0.06 },
   ulice_ruzova:  { p: [42.3, 1.9, 6.3],  yaw: 2.050,   pitch: 0.06 },
   zataras:  { p: [0, 2.2, 0],     yaw: 0,              pitch: -0.02, atBarrier: 0 },

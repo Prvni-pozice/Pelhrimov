@@ -1,0 +1,57 @@
+{
+  "_cti_me": [
+    "Údaje o konkrétních domech, které OSM nemá a odhad je dostal špatně.",
+    "Ke každému záznamu patří zdroj. Co tu není, se odvodí z OSM a pravidel",
+    "v scripts/build_world.py — a odhad se může mýlit, proto tenhle soubor.",
+    "Klíč je OSM way id. Pole: levels, roof (gable|hipped|flat|mansard),",
+    "ridge (long|front), arcade (bool), wall, roofcol, nazev."
+  ],
+  "domy": {
+    "w53554297": {
+      "nazev": "Komerční banka",
+      "roof": "hipped", "ridge": "front", "arcade": false,
+      "wall": "#b9bcc0", "roofcol": "#8f9499",
+      "zdroj": "místní znalost uživatele: nemá sedlovou střechu ani podloubí, je šedivá"
+    },
+    "w53554296": {
+      "nazev": "Masarykovo náměstí 78",
+      "roof": "hipped", "ridge": "front", "arcade": false,
+      "wall": "#f0dc9a",
+      "zdroj": "Wikimedia Commons: Pelhřimov, Masarykovo náměstí 78 a 79.jpg (CC BY-SA 4.0) — valbová střecha s hřebenem podél náměstí, přízemí s výkladci bez podloubí"
+    },
+    "w53554299": {
+      "nazev": "Masarykovo náměstí 79",
+      "roof": "hipped", "ridge": "front", "arcade": false,
+      "wall": "#f2e3ae",
+      "zdroj": "Wikimedia Commons: Pelhřimov, Masarykovo náměstí 78 a 79.jpg (CC BY-SA 4.0)"
+    },
+    "w87379231": {
+      "nazev": "Česká spořitelna (čp. 31)",
+      "roof": "hipped", "ridge": "front", "arcade": false, "wall": "#f4ecc9",
+      "zdroj": "Wikimedia Commons: Pelhřimov, Masarykovo náměstí (jižní strana).jpg (CC BY-SA 4.0) — klasicistní blok s tympanonem, hřeben podél náměstí"
+    },
+    "w87378882": {
+      "nazev": "Hotel Slávie (čp. 30)",
+      "roof": "mansard", "ridge": "front", "arcade": false, "wall": "#f6f2e2", "roofcol": "#4a4a4e",
+      "zdroj": "Wikimedia Commons: Pelhřimov, Masarykovo náměstí (jižní strana).jpg (CC BY-SA 4.0) — tmavá mansardová střecha"
+    },
+    "w87381239": { "arcade": true, "wall": "#e8c65a",
+      "zdroj": "OSM way 502105371 covered=arcade; barva z Commons: View NNW (CC BY-SA 4.0)" },
+    "w87379770": { "arcade": true, "wall": "#c3cfc0",
+      "zdroj": "OSM way 502105371 covered=arcade; barva z Commons: View NNW" },
+    "w87379302": { "arcade": true, "wall": "#e0917c",
+      "zdroj": "OSM way 502105371 covered=arcade; barva z Commons: View NNW" },
+    "w87378459": { "arcade": true, "wall": "#b7dcc9",
+      "zdroj": "OSM way 502105371 covered=arcade; barva z Commons: View NNW" },
+    "w87379035": { "arcade": true, "wall": "#eddfb4",
+      "zdroj": "OSM way 502105371 covered=arcade" },
+    "w87379725": { "arcade": true, "wall": "#dcc9d6",
+      "zdroj": "OSM way 502105371 covered=arcade" },
+    "w68679063": { "arcade": true,
+      "zdroj": "OSM way 502105371 covered=arcade" },
+    "w53555439": {
+      "nazev": "Šrejnarovský dům", "arcade": true,
+      "zdroj": "OSM way 502105371 covered=arcade (nároží fronty)"
+    }
+  }
+}

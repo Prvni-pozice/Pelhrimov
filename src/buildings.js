@@ -312,16 +312,30 @@ export function buildHouse(b, ter, front, detail, through) {
 // tím pádem po celé délce stejný a schody krytiny se slijí do dlouhých pruhů.
 function buildRoof(b, C) {
   const { set, M, nx, nz, ou, ov, uc, vc, eaveC, roofC } = C
-  const halfW = Math.max(1.2, b.W / 2), halfL = Math.max(1.2, b.L / 2)
+  // Kterým směrem leží hřeben. Měšťanský dům na hluboké parcele ho má kolmo
+  // k náměstí (do něj pak kouká štít) — to je 'long', podél delší osy půdorysu.
+  // Blok banky, spořitelny nebo hotelu ho má naopak PODÉL ulice ('front');
+  // bez tohoto rozlišení dostala Komerční banka sedlovku jako měšťanský dům.
+  const frontRidge = b.ridge === 'front'
+  const halfW = Math.max(1.2, (frontRidge ? b.L : b.W) / 2)   // napříč hřebeni
+  const halfL = Math.max(1.2, (frontRidge ? b.W : b.L) / 2)   // podél hřebene
 
   /** výška střechy nad okapem v buňkách (0 = mimo střechu) */
-  const prof = (dl, dd) => {
+  const prof = (du, dv) => {
+    const dl = frontRidge ? dv : du      // podél hřebene
+    const dd = frontRidge ? du : dv      // napříč hřebeni
     let t
     switch (b.roof) {
       case 'flat': return 1
       case 'skillion': t = 0.15 + 0.85 * (dd / (2 * halfW) + 0.5); break
       case 'hipped': t = Math.min(1 - Math.abs(dd) / halfW,
                                   1 - Math.max(0, Math.abs(dl) - (halfL - halfW)) / halfW); break
+      case 'mansard': {
+        // dvojí sklon: dole strmě, nahoře skoro naplocho
+        const a = Math.abs(dd) / halfW
+        t = a > 0.45 ? (1 - a) / 0.55 * 0.7 : 0.7 + (0.45 - a) / 0.45 * 0.3
+        break
+      }
       case 'pyramidal': t = 1 - Math.max(Math.abs(dd) / halfW, Math.abs(dl) / halfL); break
       default: t = 1 - Math.abs(dd) / halfW    // gable
     }
@@ -354,7 +368,7 @@ function buildRoof(b, C) {
   // přepsal ho pak roofovací zápis sousední buňky a výsledek závisel na tom,
   // kterým směrem štít kouká — polovina domů měla místo omítnutého štítu
   // oranžový trojúhelník krytiny.
-  if (b.sq && b.roof === 'gable') {
+  if (b.sq && b.roof === 'gable' && b.ridge !== 'front') {
     for (let j = 0; j < nz; j++) {
       for (let i = 0; i < nx; i++) {
         if (!M(i, j)) continue
