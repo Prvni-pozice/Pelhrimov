@@ -37,10 +37,69 @@ const CSS = `
 #card .tick { color: #8fe08f; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
 #help { position: absolute; left: 14px; bottom: 14px; padding: 8px 12px; font-size: 12px; opacity: .78; }
 #help kbd { background: #ffffff22; border-radius: 4px; padding: 1px 5px; font: inherit; }
+/* ── dotykové ovládání ───────────────────────────────────────────────
+   Nákres kniplu vlevo dole ukazuje, kam dát prst. Bez něj lidé na mobilu
+   nevědí, že levá polovina obrazovky chodí a pravá se rozhlíží. */
+#stick { position: absolute; left: 26px; bottom: 26px; width: 132px; height: 132px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.34);
+  background: radial-gradient(circle, rgba(18,24,32,.42), rgba(18,24,32,.18));
+  box-shadow: 0 4px 18px rgba(0,0,0,.28); }
+#stick .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px;
+  margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255,255,255,.5);
+  border: 2px solid rgba(255,255,255,.72); transition: background .12s; }
+#stick.on .knob { background: #ffd27a; border-color: #fff; }
+#stick .dir { position: absolute; color: rgba(255,255,255,.62); font-size: 15px; line-height: 1; }
+#stick .up { left: 50%; top: 9px; transform: translateX(-50%); }
+#stick .dn { left: 50%; bottom: 9px; transform: translateX(-50%); }
+#stick .lf { left: 9px; top: 50%; transform: translateY(-50%); }
+#stick .rt { right: 9px; top: 50%; transform: translateY(-50%); }
+#stick .lbl { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%);
+  font-size: 11px; white-space: nowrap; color: rgba(255,255,255,.7); text-shadow: 0 1px 3px #000; }
+#look { position: absolute; right: 26px; bottom: 34px; width: 104px; text-align: center;
+  font-size: 11px; color: rgba(255,255,255,.7); text-shadow: 0 1px 3px #000; }
+#look svg { width: 54px; height: 54px; opacity: .66; display: block; margin: 0 auto 4px; }
+
+#intro { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  padding: 20px 26px; max-width: min(430px, 88vw); text-align: center;
+  transition: opacity .45s; }
+#intro h2 { margin: 0 0 4px; font-size: 20px; }
+#intro p { margin: 6px 0; font-size: 13px; opacity: .86; }
+#intro table { margin: 10px auto 2px; font-size: 13px; border-spacing: 10px 4px; }
+#intro td:first-child { text-align: right; opacity: .72; white-space: nowrap; }
+#intro td:last-child { text-align: left; font-weight: 600; }
+#intro .zav { font-size: 11px; opacity: .55; margin-top: 10px; }
+#intro.pryc { opacity: 0; pointer-events: none; }
+
+/* ── úzká obrazovka ──────────────────────────────────────────────────
+   Na mobilu se panely z desktopu překrývaly. Tady se skládají pod sebe:
+   nahoře varování a cíl, vpravo nahoře počitadlo, dole knipl a minimapa. */
 @media (max-width: 720px) {
-  #mapwrap { width: 132px; height: 132px; }
-  #goal { top: 8px; padding: 8px 12px; }
-  #help { display: none; }
+  #goal { top: auto; left: 8px; right: 8px; transform: none; min-width: 0;
+    max-width: none; padding: 7px 10px; }
+  #goal .name { font-size: 15px; }
+  #goal .hint, #goal .vedle { font-size: 11px; }
+  #warn { position: absolute; top: 8px; left: 8px; right: 8px; max-width: none;
+    padding: 6px 10px; font-size: 10.5px; }
+  #goal { top: 8px; }
+  #ui.demo #goal { top: 72px; }
+  #score { top: auto; right: 8px; bottom: 226px; padding: 6px 10px; font-size: 12px; }
+  #strany { display: none; }
+  #mapwrap { width: 124px; height: 124px; right: 8px; bottom: 26px; }
+  #stick { left: 16px; bottom: 34px; width: 116px; height: 116px; }
+  #stick .knob { width: 46px; height: 46px; margin: -23px 0 0 -23px; }
+  #look { right: 8px; bottom: 158px; width: 124px; font-size: 10px; }
+  #look svg { width: 38px; height: 38px; }
+  #hud, #help { display: none; }
+  #arrow { width: 62px; height: 62px; margin: -31px 0 0 -31px; }
+  #card { padding: 14px 16px; }
+  #card h2 { font-size: 17px; }
+  #intro { padding: 14px 16px; max-width: 92vw; }
+  #intro h2 { font-size: 18px; }
+  #intro p, #intro table { font-size: 12px; }
+  #intro table { border-spacing: 7px 3px; }
+}
+@media (max-height: 520px) {
+  #intro table { display: none; }
 }
 `
 
@@ -71,6 +130,20 @@ export class HUD {
       <div id="mapwrap" class="panel"><canvas width="380" height="380"></canvas></div>
       <div id="card" class="panel"><div class="tick party">Nalezeno</div><h2></h2><div class="info"></div>
         <div class="zdroj"></div></div>
+      <div id="stick" hidden>
+        <span class="dir up">▲</span><span class="dir dn">▼</span>
+        <span class="dir lf">◀</span><span class="dir rt">▶</span>
+        <span class="knob"></span><span class="lbl">prst sem — chůze</span>
+      </div>
+      <div id="look" hidden>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="18" r="8" fill="none" stroke="#fff" stroke-width="3"/>
+          <path d="M24 30v12M18 36l6 6 6-6" fill="none" stroke="#fff" stroke-width="3"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        tažením se rozhlédneš
+      </div>
+      <div id="intro" class="panel"></div>
       <div id="help" class="panel">
         <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> chůze · <kbd>Shift</kbd> běh ·
         <kbd>mezerník</kbd> skok · myš rozhled · <kbd>F</kbd> volná kamera
@@ -87,12 +160,45 @@ export class HUD {
       cardI: root.querySelector('#card .info'), map: root.querySelector('#mapwrap canvas'),
       vedle: root.querySelector('#goal .vedle'), strany: root.querySelector('#strany'),
       warn: root.querySelector('#warn'), tick: root.querySelector('#card .tick'),
-      zdroj: root.querySelector('#card .zdroj'),
+      zdroj: root.querySelector('#card .zdroj'), stick: root.querySelector('#stick'),
+      knob: root.querySelector('#stick .knob'), look: root.querySelector('#look'),
+      intro: root.querySelector('#intro'), help: root.querySelector('#help'),
     }
+
+    // ── úvodní nápověda ──
+    // Na dotykovém zařízení je to jediné místo, kde se hráč dozví, že levá
+    // polovina obrazovky chodí a pravá se rozhlíží. Mizí sama po chvíli,
+    // nebo hned, jakmile se hráč pohne.
+    this.touch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window
+    if (this.touch) {
+      this.el.stick.hidden = false
+      this.el.look.hidden = false
+      this.el.help.hidden = true
+    }
+    this.el.intro.innerHTML = this.touch
+      ? `<h2>Pelhřimov</h2><p>Projdi náměstí, podloubí a všechny tři brány
+         a posbírej listiny.</p>
+         <table><tr><td>levá polovina</td><td>chůze — přidrž a táhni</td></tr>
+         <tr><td>pravá polovina</td><td>rozhlížení</td></tr>
+         <tr><td>tah nahoru</td><td>skok</td></tr></table>
+         <p class="zav">Klepnutím zavřeš.</p>`
+      : `<h2>Pelhřimov</h2><p>Projdi náměstí, podloubí a všechny tři brány
+         a posbírej listiny.</p>
+         <table><tr><td>W A S D</td><td>chůze</td></tr>
+         <tr><td>myš</td><td>rozhlížení (klikni pro uzamčení)</td></tr>
+         <tr><td>Shift / mezerník</td><td>běh / skok</td></tr>
+         <tr><td>F</td><td>volná kamera</td></tr></table>
+         <p class="zav">Klávesou nebo kliknutím zavřeš.</p>`
+    this.introUntil = performance.now() + 7000
+    const close = () => this.hideIntro()
+    addEventListener('keydown', close, { once: true })
+    this.el.intro.addEventListener('click', close)
+    this.el.intro.addEventListener('touchstart', close, { passive: true })
     this.base = renderMap(data, 380)
     this.cardUntil = 0
 
     if (collect.demo) {
+      root.classList.add('demo')
       this.el.warn.hidden = false
       this.el.warn.innerHTML = '<b>Ukázková data.</b> Programy stran zatím '
         + 'nejsou vyplněné, takže se sbírají údaje o městě z map. '
@@ -104,6 +210,23 @@ export class HUD {
       row.querySelector('.n').textContent = p.nazev
       this.el.strany.appendChild(row)
     }
+  }
+
+  hideIntro() {
+    if (!this.introUntil) return
+    this.introUntil = 0
+    this.el.intro.classList.add('pryc')
+  }
+
+  /** Poloha kniplu podle prstu — nákres musí reagovat, jinak vypadá jako obrázek. */
+  drawStick(input) {
+    if (!this.touch) return
+    const t = input.touchMove
+    const on = t.id !== null
+    this.el.stick.classList.toggle('on', on)
+    const r = 34
+    this.el.knob.style.transform = on
+      ? `translate(${(t.x * r).toFixed(1)}px, ${(t.y * r).toFixed(1)}px)` : ''
   }
 
   /** Kartička pamětihodnosti. */
@@ -129,8 +252,10 @@ export class HUD {
     this.cardUntil = performance.now() + 6000
   }
 
-  update(px, pz, yaw) {
+  update(px, pz, yaw, input) {
     const q = this.q, c = this.c
+    if (input) this.drawStick(input)
+    if (this.introUntil && performance.now() > this.introUntil) this.hideIntro()
     if (this.cardUntil && performance.now() > this.cardUntil) {
       this.el.card.classList.remove('on'); this.cardUntil = 0
     }

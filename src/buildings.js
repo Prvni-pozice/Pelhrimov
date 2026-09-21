@@ -28,6 +28,7 @@ export const VOX = 0.5        // hrana voxelu domu
 const G_CELLS = 8             // přízemí = 4 m
 const F_CELLS = 6             // další patro = 3 m
 const PAD = 3                 // okraj mřížky pro římsu a přesah střechy
+const ARC_REACH = 4.0         // jak daleko se dům předsadí k ose podloubí
 const FOOT = 3                // kolik buněk zdi pokračuje pod terén
 
 const B_OMITKA = 10, B_SOKL = 11, B_STRECHA = 13, B_HREBEN = 14, B_RIMSA = 15
@@ -45,9 +46,10 @@ function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) *
  * @param {[number,number]|null} front  bod, ke kterému dům "kouká" (náměstí/ulice)
  * @param {boolean} detail  true = hratelná oblast (okna, portál), false = kulisa
  * @param {?[number,number]} through  směr ulice skrz bránu (jednotkový vektor)
+ * @param {?Array} arcLine  úsek osy podloubí [[x,z],[x,z]] ve světě
  * @returns {?{positions:number[],normals:number[],colors:number[],indices:number[],box:object}}
  */
-export function buildHouse(b, ter, front, detail, through) {
+export function buildHouse(b, ter, front, detail, through, arcLine) {
   const poly = b.poly
   // těžiště půdorysu = počátek lokální soustavy, osa u leží podél domu
   let mx = 0, mz = 0
@@ -63,9 +65,13 @@ export function buildHouse(b, ter, front, detail, through) {
     minU = Math.min(minU, p[0]); maxU = Math.max(maxU, p[0])
     minV = Math.min(minV, p[1]); maxV = Math.max(maxV, p[1])
   }
-  const nx = Math.ceil((maxU - minU) / VOX) + PAD * 2
-  const nz = Math.ceil((maxV - minV) / VOX) + PAD * 2
-  const ou = minU - PAD * VOX, ov = minV - PAD * VOX
+  // Podloubí se srovnává na společnou osu, takže dům může být předsazený —
+  // mřížka na to musí mít místo navíc.
+  const pushC = b.arcade && arcLine ? Math.round(ARC_REACH / VOX) : 0
+  const pad = PAD + pushC
+  const nx = Math.ceil((maxU - minU) / VOX) + pad * 2
+  const nz = Math.ceil((maxV - minV) / VOX) + pad * 2
+  const ou = minU - pad * VOX, ov = minV - pad * VOX
   const uc = (minU + maxU) / 2, vc = (minV + maxV) / 2
 
   // ── 1. rastr půdorysu + terén pod ním ──
@@ -86,6 +92,54 @@ export function buildHouse(b, ter, front, detail, through) {
     }
   }
   if (!cells) return null                 // půdorys menší než jedna buňka
+
+  // ── 1b. předsazení k ose podloubí ──
+  //
+  // Fasády téhle fronty se v OSM postupně odsazují o skoro pět metrů. Kdyby
+  // si každý dům kroil podloubí od svého líce, začínalo by u každého jinde
+  // a na hranicích parcel by zůstaly stěny napříč průchodem — přesně ty dvě,
+  // kterých si šlo všimnout ze hry.
+  //
+  // Proto se mezera mezi osou podloubí a domem vyplní: půdorys se rozšíří
+  // dopředu až k ose, takže patra nad podloubím přečnívají a líc pilířů je
+  // u celé fronty v jedné přímce. Počítá se to v soustavě OSY, ne v mřížce
+  // domu — jinak se malé natočení každého domu projeví jako schod.
+  let arcFrame = null
+  if (b.arcade && arcLine) {
+    const a0 = toLocal(arcLine[0][0], arcLine[0][1])
+    const a1 = toLocal(arcLine[1][0], arcLine[1][1])
+    const lx = a1[0] - a0[0], lv = a1[1] - a0[1]
+    const len = Math.hypot(lx, lv) || 1
+    const dxl = lx / len, dvl = lv / len
+    let px = -dvl, pv = dxl
+    let cu = 0, cw = 0, n2 = 0
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      if (mask[j * nx + i]) { cu += ou + (i + 0.5) * VOX; cw += ov + (j + 0.5) * VOX; n2++ }
+    }
+    if (n2) {
+      cu /= n2; cw /= n2
+      if ((cu - a0[0]) * px + (cw - a0[1]) * pv < 0) { px = -px; pv = -pv }
+      arcFrame = { a0, dx: dxl, dv: dvl, px, pv }
+      const steps = Math.round(ARC_REACH / VOX)
+      const add = []
+      for (let j = 0; j < nz; j++) {
+        for (let i = 0; i < nx; i++) {
+          if (mask[j * nx + i]) continue
+          const u = ou + (i + 0.5) * VOX, v = ov + (j + 0.5) * VOX
+          const q = (u - a0[0]) * px + (v - a0[1]) * pv
+          if (q < -VOX || q > ARC_REACH) continue
+          // je hlouběji ve stejném směru zdivo? pak je tohle mezera k ose
+          for (let k = 1; k <= steps; k++) {
+            const iu = Math.round((u + px * k * VOX - ou) / VOX - 0.5)
+            const iv = Math.round((v + pv * k * VOX - ov) / VOX - 0.5)
+            if (iu < 0 || iv < 0 || iu >= nx || iv >= nz) break
+            if (mask[iv * nx + iu]) { add.push(j * nx + i); break }
+          }
+        }
+      }
+      for (const k of add) { mask[k] = 1; cells++ }
+    }
+  }
 
   const y0 = gMin - FOOT * VOX
   for (let k = 0; k < gc.length; k++) gc[k] = Math.round((gc[k] - y0) / VOX)
@@ -212,13 +266,23 @@ export function buildHouse(b, ter, front, detail, through) {
 
   // ── 3b. podloubí ──
   let collidePoly = poly
+  let collideRects = null
   const spots = []
   if (b.arcade && front) {
-    const clipped = carveArcade(b, {
+    const carvedCells = new Uint8Array(nx * nz)
+    const ok = carveArcade(b, {
       set, get, M, nx, nz, ou, ov, uc, vc, floorC,
-      front: toLocal(front[0], front[1]), toWorld, lp, spots,
+      front: toLocal(front[0], front[1]), toWorld, lp, spots, carvedCells,
+      frame: arcFrame,
     })
-    if (clipped) collidePoly = clipped
+    if (ok) {
+      // Kolize podloubí NEjdou udělat ořezem půdorysu polorovinou. Domy tu
+      // mají nepravidelné parcely (jeden má šestnáct vrcholů) a ořez
+      // nekonvexního tvaru dá zdegenerovaný polygon, do kterého test bodu
+      // hlásí nesmysly — v podloubí pak stála neviditelná stěna. Rozložíme
+      // proto zbytek půdorysu na obdélníky přímo z rastru; je to přesné.
+      collideRects = maskRects(mask, carvedCells, nx, nz, ou, ov, toWorld)
+    }
   }
 
   // ── 4. římsa ── vystupuje o buňku z líce, dělá stín a dělí zeď od střechy
@@ -303,6 +367,7 @@ export function buildHouse(b, ter, front, detail, through) {
   mesh.eaveY = y0 + eaveC * VOX
   // Do podloubí se musí dát vejít, takže kolizní obrys je o jeho hloubku menší.
   mesh.collide = collidePoly
+  mesh.collideRects = collideRects
   mesh.spots = spots        // místa v podloubí a v průjezdech bran
   return mesh
 }
@@ -421,104 +486,88 @@ const ARC_PIER = 2      // šířka pilíře, 1 m
  *
  * @returns {?Array} zmenšený půdorys ve světových souřadnicích
  */
-function carveArcade(b, C) {
-  const { set, get, M, nx, nz, ou, ov, uc, vc, floorC, front, toWorld, lp, spots } = C
-
-  // Která strana domu kouká na náměstí: ta, jejíž vnější směr míří k `front`.
-  const du = front[0] - uc, dv = front[1] - vc
-  const alongU = Math.abs(du) < Math.abs(dv)     // fasáda kolmá na v?
-  const sign = (alongU ? dv : du) > 0 ? 1 : -1
-
-  // Pro každou linii kolmou k fasádě najdi krajní buňku a zakroj dovnitř.
-  const outer = new Int16Array(alongU ? nx : nz).fill(-1)
-  const N1 = alongU ? nx : nz, N2 = alongU ? nz : nx
-  const cell = (a, bIdx) => alongU ? M(a, bIdx) : M(bIdx, a)
-  const put = (a, y, bIdx, v) => alongU ? set(a, y, bIdx, v) : set(bIdx, y, a, v)
-  for (let a = 0; a < N1; a++) {
-    for (let k = 0; k < N2; k++) {
-      const bIdx = sign > 0 ? N2 - 1 - k : k
-      if (cell(a, bIdx)) { outer[a] = bIdx; break }
-    }
-  }
-
-  // střed fasády v buňkách, aby oblouky vyšly symetricky
-  const centre = Math.round(((alongU ? uc - ou : vc - ov)) / VOX)
-  let carved = 0
-  for (let a = 0; a < N1; a++) {
-    const o = outer[a]
-    if (o < 0) continue
-    // je dům v téhle linii dost hluboký?
-    let depth = 0
-    for (let d = 0; d < ARC_DEPTH + 2; d++) {
-      if (!cell(a, o - sign * d)) break
-      depth++
-    }
-    if (depth <= ARC_DEPTH) continue
-
-    const t = ((a - centre) % ARC_SPAN + ARC_SPAN + ARC_SPAN / 2) % ARC_SPAN - ARC_SPAN / 2
-    const pier = Math.abs(t) > (ARC_SPAN - ARC_PIER) / 2
-
-    for (let d = 0; d < ARC_DEPTH; d++) {
-      const bIdx = o - sign * d
-      for (let y = floorC + 1; y <= floorC + ARC_TOP; y++) put(a, y, bIdx, 0)
-      put(a, floorC, bIdx, 8)          // dlažba pod podloubím
-    }
-    carved++
-
-    if (pier) {
-      // kamenný sloup v líci fasády
-      for (let y = floorC + 1; y <= floorC + ARC_TOP; y++) put(a, y, o, B_KAMEN)
-    } else {
-      // Půlkruhový oblouk. Bílý je jen samotný klenební pás (dvě buňky),
-      // plocha nad ním zůstává v barvě fasády — přesně tak to na náměstí
-      // vypadá a teprve tím je oblouk na dálku poznat. Vyplnit celé pole
-      // bílou znamenalo, že otvor vypadal hranatě.
-      const R = (ARC_SPAN - ARC_PIER) / 2
-      const rise = Math.round(Math.sqrt(Math.max(0, R * R - t * t)))
-      const yArch = floorC + ARC_TOP - R + rise
-      for (let y = yArch; y <= floorC + ARC_TOP; y++) {
-        put(a, y, o, y <= yArch + 1 ? B_RIMSA : B_OMITKA)
-      }
-      // střed pole podloubí — sem se dá schovat sběratelský předmět
-      if (spots && Math.abs(t) < 0.5) {
-        const mid = o - sign * Math.round(ARC_DEPTH / 2)
-        const lu = alongU ? ou + (a + 0.5) * VOX : ou + (mid + 0.5) * VOX
-        const lv = alongU ? ov + (mid + 0.5) * VOX : ov + (a + 0.5) * VOX
-        const [wx, wz] = toWorld(lu, lv)
-        spots.push({ x: +wx.toFixed(2), z: +wz.toFixed(2), kind: 'podloubi', id: b.id })
-      }
-      // výkladec v zadní stěně podloubí
-      const back = o - sign * ARC_DEPTH
-      if (cell(a, back)) {
-        const isDoor = Math.abs(t) < 1
-        for (let y = floorC + 1; y <= floorC + 5; y++) {
-          if (isDoor || y >= floorC + 2) put(a, y, back, isDoor ? B_DVERE : B_SKLO)
-        }
-      }
-    }
-  }
-  if (carved < 3) return null
-
-  // ── zmenšený půdorys pro kolize ──
-  // Ořízneme mnohoúhelník polorovinou posunutou o hloubku podloubí dovnitř.
-  const axis = alongU ? 1 : 0
-  let lim = sign > 0 ? -1e9 : 1e9
-  for (const p of lp) lim = sign > 0 ? Math.max(lim, p[axis]) : Math.min(lim, p[axis])
-  lim -= sign * ARC_DEPTH * VOX
-  const inside = (p) => sign > 0 ? p[axis] <= lim : p[axis] >= lim
+/** Rozloží rastr půdorypu bez vykrojených buněk na obdélníky ve světě. */
+function maskRects(mask, carved, nx, nz, ou, ov, toWorld) {
+  const used = new Uint8Array(nx * nz)
+  const free = (i, j) => mask[j * nx + i] && !carved[j * nx + i] && !used[j * nx + i]
   const out = []
-  for (let i = 0; i < lp.length; i++) {
-    const a = lp[i], c = lp[(i + 1) % lp.length]
-    const ia = inside(a), ic = inside(c)
-    if (ia) out.push(a)
-    if (ia !== ic) {
-      const t2 = (lim - a[axis]) / (c[axis] - a[axis])
-      const cut = [a[0] + (c[0] - a[0]) * t2, a[1] + (c[1] - a[1]) * t2]
-      out.push(cut)
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      if (!free(i, j)) continue
+      let w = 1
+      while (i + w < nx && free(i + w, j)) w++
+      let h = 1
+      outer: while (j + h < nz) {
+        for (let q = 0; q < w; q++) if (!free(i + q, j + h)) break outer
+        h++
+      }
+      for (let l = 0; l < h; l++) for (let q = 0; q < w; q++) used[(j + l) * nx + i + q] = 1
+      const u0 = ou + i * VOX, v0 = ov + j * VOX
+      const u1 = u0 + w * VOX, v1 = v0 + h * VOX
+      out.push([toWorld(u0, v0), toWorld(u1, v0), toWorld(u1, v1), toWorld(u0, v1)])
+      i += w - 1
     }
   }
-  if (out.length < 3) return null
-  return out.map(p => toWorld(p[0], p[1]))
+  return out
+}
+
+function carveArcade(b, C) {
+  const { set, M, nx, nz, ou, ov, floorC, toWorld, spots, carvedCells, frame } = C
+  if (!frame) return false
+  const { a0, dx, dv, px, pv } = frame
+
+  // Koridor se měří od SPOLEČNÉ osy, ne od líce každého domu. Soustavu osy
+  // spočítal už buildHouse (potřeboval ji na předsazení půdorysu), takže tady
+  // se jen použije — a je zaručeně stejná pro předsazení i pro krojení.
+  const DEPTH = ARC_DEPTH * VOX               // hloubka koridoru v metrech
+  let carved = 0, bays = new Map()
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      if (!M(i, j)) continue
+      const u = ou + (i + 0.5) * VOX, v = ov + (j + 0.5) * VOX
+      const q = (u - a0[0]) * px + (v - a0[1]) * pv     // kolmo od osy dovnitř
+      if (q >= DEPTH) continue
+      const s = (u - a0[0]) * dx + (v - a0[1]) * dv     // podél osy
+
+      // rozteč pilířů z délky podél osy → navazují i přes hranice domů
+      const m = ((s % (ARC_SPAN * VOX)) + ARC_SPAN * VOX) % (ARC_SPAN * VOX)
+      const t = m - ARC_SPAN * VOX / 2
+      const pier = q < VOX && Math.abs(t) > (ARC_SPAN - ARC_PIER) * VOX / 2
+
+      for (let y = floorC + 1; y <= floorC + ARC_TOP; y++) set(i, y, j, 0)
+      set(i, floorC, j, 8)                              // dlažba pod podloubím
+      if (carvedCells) carvedCells[j * nx + i] = 1
+      carved++
+
+      if (pier) {
+        for (let y = floorC + 1; y <= floorC + ARC_TOP; y++) set(i, y, j, B_KAMEN)
+        if (carvedCells) carvedCells[j * nx + i] = 0
+      } else if (q < VOX) {
+        // oblouk nad otvorem: bílý klenební pás, nad ním barva fasády
+        const R = (ARC_SPAN - ARC_PIER) / 2
+        const rise = Math.round(Math.sqrt(Math.max(0, R * R - (t / VOX) ** 2)))
+        const yArch = floorC + ARC_TOP - R + rise
+        for (let y = yArch; y <= floorC + ARC_TOP; y++) {
+          set(i, y, j, y <= yArch + 1 ? B_RIMSA : B_OMITKA)
+        }
+        // pod obloukem se prochází, takže v kolizích zůstává volno
+        // střed pole si zapamatujeme jako úkryt
+        if (Math.abs(t) < VOX) {
+          const key = Math.round(s / (ARC_SPAN * VOX))
+          if (!bays.has(key)) {
+            const [wx, wz] = toWorld(u + px * DEPTH / 2, v + pv * DEPTH / 2)
+            bays.set(key, { x: +wx.toFixed(2), z: +wz.toFixed(2), kind: 'podloubi', id: b.id })
+          }
+        }
+      } else if (q >= DEPTH - VOX) {
+        // výkladec v zadní stěně podloubí
+        for (let y = floorC + 2; y <= floorC + 5; y++) set(i, y, j, B_SKLO)
+        if (carvedCells) carvedCells[j * nx + i] = 0
+      }
+    }
+  }
+  for (const s2 of bays.values()) spots.push(s2)
+  return carved >= 6
 }
 
 /**

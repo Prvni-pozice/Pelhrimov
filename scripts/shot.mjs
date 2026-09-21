@@ -28,6 +28,8 @@ for (const v of views) {
   const t0 = Date.now()
   await page.goto(`${BASE}/?cam=${v}`, { waitUntil: 'load', timeout: 120000 })
   await page.waitForFunction('window.__ready === true', null, { timeout: 180000 })
+  // úvodní nápověda překrývá scénu, pro kontrolní snímek ji zavřeme
+  await page.keyboard.press('Escape')
   await page.waitForTimeout(2500)          // pár snímků, ať doběhne stínová mapa
   await page.screenshot({ path: `${OUT}/${v}.png` })
   const s = await page.evaluate('window.__stats()')

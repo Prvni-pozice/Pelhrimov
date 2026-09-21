@@ -109,6 +109,8 @@ const VIEWS = {
   stit:     { p: [-10, 2.0, -18],  yaw: Math.PI,       pitch: 0.42 },
   banka:    { p: [12, 2.2, -16],  yaw: 2.50,           pitch: 0.16 },
   podloubi_s: { p: [-13.6, 2.0, -25.9], yaw: -2.66,    pitch: 0.14 },
+  podloubi_in: { p: [4.92, 1.7, -54.08], yaw: -1.155, pitch: 0.02 },
+  podloubi_in2:{ p: [-50, 1.7, -28.5], yaw: 1.99,      pitch: 0.02 },
   ulice_k_brane: { p: [-4.0, 1.9, 44.6], yaw: -0.265,  pitch: 0.06 },
   ulice_ruzova:  { p: [42.3, 1.9, 6.3],  yaw: 2.050,   pitch: 0.06 },
   zataras:  { p: [0, 2.2, 0],     yaw: 0,              pitch: -0.02, atBarrier: 0 },
@@ -159,7 +161,7 @@ renderer.setAnimationLoop(() => {
     camera.position.copy(free.pos)
     camera.lookAt(free.pos.x + fwd.x, free.pos.y + fwd.y, free.pos.z + fwd.z)
     // HUD ať ukazuje i ve volné kameře, jinak jsou kontrolní snímky prázdné
-    hud.update(free.pos.x, free.pos.z, free.yaw)
+    hud.update(free.pos.x, free.pos.z, free.yaw, input)
   } else {
     player.update(dt, cmd)
     player.applyTo(camera)
@@ -167,7 +169,7 @@ renderer.setAnimationLoop(() => {
     if (got) hud.showItem(got)
     const reached = quests.update(player.pos.x, player.pos.z)
     if (reached && !got) hud.show(reached)
-    hud.update(player.pos.x, player.pos.z, player.yaw)
+    hud.update(player.pos.x, player.pos.z, player.yaw, input)
   }
 
   // stínová kamera jede s hráčem — pokrýt celou mapu jednou mapou by znamenalo

@@ -94,12 +94,14 @@ export async function buildWorld(data, onProgress = () => {}) {
     // konci ulice to vypadalo jako nedostavěné sídliště; portál a dveře
     // ale stačí jen tam, kam hráč dojde.
     const through = b.special === 'gate' ? roadDir(b, data.roads) : null
-    const mesh = buildHouse(b, ter, fronts.get(b.id) || null, true, through)
+    const arcLine = b.arcade ? nearestArcade(b, data.arcades) : null
+    const mesh = buildHouse(b, ter, fronts.get(b.id) || null, true, through, arcLine)
     if (!mesh) continue
     let cx = 0, cz = 0
     for (const p of b.poly) { cx += p[0]; cz += p[1] }
     hset.add(mesh, cx / b.poly.length, cz / b.poly.length)
     boxes.push({ poly: mesh.collide || b.poly, shape: b.poly, top: mesh.eaveY,
+                 rects: mesh.collideRects,
                  name: b.name, id: b.id, sq: b.sq, special: b.special, through })
     for (const sp of mesh.spots || []) {
       sp.y = ter.groundY(sp.x, sp.z)
@@ -165,6 +167,7 @@ export async function buildWorld(data, onProgress = () => {}) {
       ? g.id === b.id
       : pointIn(g.c[0], g.c[1], b.poly))
     if (g) addGateColliders(col, b, g.c[0], g.c[1], g.through)
+    else if (b.rects) for (const r of b.rects) col.addPolygon(r, b.top)
     else col.addPolygon(b.poly, b.top)
   }
   for (const w of data.walls) {
@@ -188,6 +191,21 @@ export async function buildWorld(data, onProgress = () => {}) {
   }
 
   return { group, terrain: ter, boxes, spots, collider: col, boundary: bound, stats }
+}
+
+/** Úsek osy podloubí nejblíž k domu — podle něj se krojí souvislý koridor. */
+function nearestArcade(b, arcades) {
+  let cx = 0, cz = 0
+  for (const p of b.poly) { cx += p[0]; cz += p[1] }
+  cx /= b.poly.length; cz /= b.poly.length
+  let best = null, bd = 1e9
+  for (const line of arcades || []) {
+    for (let i = 0; i < line.length - 1; i++) {
+      const d = segDist(cx, cz, line[i], line[i + 1])
+      if (d < bd) { bd = d; best = [line[i], line[i + 1]] }
+    }
+  }
+  return best
 }
 
 /** Směr ulice, která prochází branou — podle nejbližšího silničního úseku. */
@@ -309,34 +327,37 @@ function heightfieldChunk(ter, cx, cz, n, colorOf) {
   })
 }
 
-/** Ke každému domu bod, ke kterému "kouká" — kvůli umístění portálu. */
+/**
+ * Ke každému domu bod, ke kterému "kouká" — kvůli portálu a podloubí.
+ *
+ * Měří se od NEJBLIŽŠÍHO ROHU půdorysu, ne od těžiště. Měšťanské domy na
+ * náměstí stojí na hlubokých parcelách; jeden má 54 m a jeho těžiště je
+ * 48 m od náměstí, takže při měření z těžiště propadl přes limit a zůstal
+ * bez podloubí i bez portálu — v podloubí z něj pak byla stěna napříč
+ * průchodem. Dům ve frontě náměstí navíc limit nemá vůbec, ten na náměstí
+ * kouká z definice.
+ */
 function frontPoints(data) {
   const m = new Map()
   const sq = data.square[0]
   for (const b of data.buildings) {
     if (!b.play) continue
-    let cx = 0, cz = 0
-    for (const p of b.poly) { cx += p[0]; cz += p[1] }
-    cx /= b.poly.length; cz /= b.poly.length
     let best = null, bd = 1e9
-    // dům na náměstí kouká na náměstí, ostatní na nejbližší ulici
-    const cands = b.sq ? [sq] : null
-    if (cands) {
-      for (let i = 0; i < sq.length; i++) {
-        const a = sq[i], c = sq[(i + 1) % sq.length]
-        const d = segDist(cx, cz, a, c)
-        if (d < bd) { bd = d; best = nearestOn(cx, cz, a, c) }
+    const probe = (a, c) => {
+      for (const p of b.poly) {
+        const d = segDist(p[0], p[1], a, c)
+        if (d < bd) { bd = d; best = nearestOn(p[0], p[1], a, c) }
       }
+    }
+    if (b.sq) {
+      for (let i = 0; i < sq.length; i++) probe(sq[i], sq[(i + 1) % sq.length])
     } else {
       for (const r of data.roads) {
         if (r.hw === 'steps' || r.hw === 'path') continue
-        for (let i = 0; i < r.poly.length - 1; i++) {
-          const d = segDist(cx, cz, r.poly[i], r.poly[i + 1])
-          if (d < bd) { bd = d; best = nearestOn(cx, cz, r.poly[i], r.poly[i + 1]) }
-        }
+        for (let i = 0; i < r.poly.length - 1; i++) probe(r.poly[i], r.poly[i + 1])
       }
     }
-    if (best && bd < 40) m.set(b.id, best)
+    if (best && (b.sq || bd < 40)) m.set(b.id, best)
   }
   return m
 }

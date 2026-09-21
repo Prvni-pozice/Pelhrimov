@@ -63,6 +63,11 @@ krok, když se mají data přegenerovat.
 | Volná kamera | `F` |
 | Mobil | levá půlka obrazovky = chůze, pravá = rozhled |
 
+Na dotykovém zařízení je vlevo dole **nakreslený knipl** se šipkami a popiskem,
+kam dát prst; knoflík se při doteku rozsvítí a vychýlí. Při spuštění se navíc
+na sedm vteřin ukáže karta s ovládáním (jiná pro dotyk a pro klávesnici),
+která zmizí sama nebo prvním dotykem či klávesou.
+
 ## Rozsah mapy
 
 Hratelná oblast sahá **130 m od okraje náměstí** a ve třech úzkých výsecích
@@ -214,6 +219,11 @@ ve voxelových schodech z něj bylo terasovité hlediště. Dlažba a asfalt pro
 berou výšku v rozích buňky (sdílených se sousedy) a náměstí je navíc proložené
 přesnou nakloněnou rovinou — domy do ní stojí svisle zapuštěné. Tráva zůstává
 po půl metru, aby si svět udržel voxelový charakter tam, kde to sluší.
+
+**Dům „kouká" podle nejbližšího rohu, ne podle těžiště.** Měšťanské domy stojí
+na hlubokých parcelách; jeden má 54 m a jeho těžiště leží 48 m od náměstí,
+takže při měření z těžiště propadl přes limit a zůstal úplně bez podloubí
+i bez portálu — právě z něj byla ta viditelná stěna v průchodu.
 
 **Každý sloupec zdi začíná na terénu pod sebou.** Dům nemá zakopanou část,
 kterou nikdo neuvidí, a ve svahu mu sám od sebe vyroste vyšší sokl na dolní

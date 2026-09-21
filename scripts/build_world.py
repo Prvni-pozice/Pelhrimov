@@ -731,6 +731,7 @@ def main():
         'roads': build_roads(ways),
         'areas': build_areas(ways),
         'walls': build_walls(ways),
+        'arcades': [],    # osy podloubí z OSM (covered=arcade)
         'boundary': [],   # doplní se níž, potřebuje brány
         'barriers': [],
         'pois': build_pois(nodes, ntags, ways),
@@ -738,6 +739,7 @@ def main():
     }
     arcs = arcade_ways(ways)
     arc_segs = [(a, b2) for line in arcs for a, b2 in zip(line, line[1:])]
+    world['arcades'] = [[[round(p[0], 2), round(p[1], 2)] for p in line] for line in arcs]
     gates = [p for p in world['pois'] if p['k'] == 'gate']
     world['boundary'] = boundary_ring(sq, gates)
     world['barriers'] = crossings(world['roads'], world['boundary'])
@@ -749,6 +751,11 @@ def main():
         near = min((min(dist_point_seg(p, a, c) for a, c in arc_segs) for p in b['poly']),
                    default=1e9) if arc_segs else 1e9
         b['arcade'] = bool(b['sq'] and near < ARCADE_NEAR and min(b['L'], b['W']) > 8.5)
+        # O kolik je dům odsazený od společné osy podloubí. Fasády té fronty
+        # se v OSM postupně odsazují o skoro pět metrů, takže každý dům začínal
+        # jinde a mezi sousedy vznikal schod napříč průchodem. Patra se proto
+        # o tenhle kus předsadí až k ose a podloubí je pak rovné.
+        b['push'] = round(min(3.5, near), 2) if b['arcade'] else 0
 
     # Ruční údaje přebijí všechno odvozené — a jen ty mají zdroj.
     manual = load_manual()
